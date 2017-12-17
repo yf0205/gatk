@@ -108,9 +108,9 @@ public final class MutectDownsampler extends ReadsDownsampler {
 
         rejectAllReadsInStride |= suspiciousReadCount.intValue() >= maxSuspiciousReadsPerStride;
 
-        if (lowQualMismatches <= maxLowQualSubstitutionsInRead) {
-            pendingReads.add(newRead);
-        }
+        //if (lowQualMismatches <= maxLowQualSubstitutionsInRead) {
+        pendingReads.add(newRead);
+        //}
     }
 
     // count the number of non-consecutive single-base mismatches between a read and the reference
