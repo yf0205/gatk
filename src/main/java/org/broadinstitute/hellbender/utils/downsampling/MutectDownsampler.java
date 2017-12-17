@@ -184,7 +184,14 @@ public final class MutectDownsampler extends ReadsDownsampler {
     }
 
     private void fetchRefBases(GATKRead newRead) {
-        refBases = referenceDataSource.queryAndPrefetch(newRead.getAssignedContig(), newRead.getAssignedStart(), newRead.getEnd() + REF_BASES_EXTRA_BUFFER).getBases();
+        // TODO: make sure we don't query past the end of the contig
+        // TODO: this is in the contig info from getSequenceDictionry()
+
+        final String contig = newRead.getAssignedContig();
+        final int end = Math.min(newRead.getEnd() + REF_BASES_EXTRA_BUFFER, header.getSequenceDictionary().getSequence(contig).getSequenceLength());
+
+
+        refBases = referenceDataSource.queryAndPrefetch(contig, newRead.getAssignedStart(), end).getBases();
         refBasesStart = newRead.getAssignedStart();
     }
 
