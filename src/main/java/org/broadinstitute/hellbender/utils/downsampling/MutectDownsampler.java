@@ -184,12 +184,8 @@ public final class MutectDownsampler extends ReadsDownsampler {
     }
 
     private void fetchRefBases(GATKRead newRead) {
-        // TODO: make sure we don't query past the end of the contig
-        // TODO: this is in the contig info from getSequenceDictionry()
-
         final String contig = newRead.getAssignedContig();
         final int end = Math.min(newRead.getEnd() + REF_BASES_EXTRA_BUFFER, header.getSequenceDictionary().getSequence(contig).getSequenceLength());
-
 
         refBases = referenceDataSource.queryAndPrefetch(contig, newRead.getAssignedStart(), end).getBases();
         refBasesStart = newRead.getAssignedStart();
@@ -233,11 +229,7 @@ public final class MutectDownsampler extends ReadsDownsampler {
 
     @Override
     public List<GATKRead> consumeFinalizedItems() {
-        // if stride is > 1, different starts may have gotten mixed up
-        // TODO: this might not end up being relevant
-        if (stride > 1) {
-            Collections.sort(finalizedReads, Comparator.comparingInt(GATKRead::getAssignedStart));
-        }
+        Collections.sort(finalizedReads, Comparator.comparingInt(GATKRead::getAssignedStart));
         final List<GATKRead> toReturn = finalizedReads;
         finalizedReads = new ArrayList<>();
         return toReturn;
