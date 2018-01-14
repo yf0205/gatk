@@ -3,6 +3,8 @@ package org.broadinstitute.hellbender.engine.spark.datasources;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.PeekingIterator;
 import htsjdk.samtools.*;
+import htsjdk.samtools.util.Locatable;
+import htsjdk.samtools.util.OverlapDetector;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -43,6 +45,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Predicate;
 
 /** Loads the reads from disk either serially (using samReaderFactory) or in parallel using Hadoop-BAM.
  * The parallel code is a modified version of the example writing code from Hadoop-BAM.
@@ -302,6 +305,12 @@ public final class ReadsSparkSource implements Serializable {
             return false; // no intervals means 'no mapped reads'
         }
         for (SimpleInterval interval : intervals) {
+
+
+            //TODO: need to ask Louis about the logic here.
+            // TODO: if the read has the unmapped flag, getContig is null, but here it seems that we're querying based only on start and end
+            // TODO: and assuming that the contig just works out
+            // TODO: this is especially weird because the intervals in traversalParameters may have many different contigs!
             if (record.getReadUnmappedFlag() && record.getAlignmentStart() != SAMRecord.NO_ALIGNMENT_START) {
                 // This follows the behavior of htsjdk's SamReader which states that "an unmapped read will be returned
                 // by this call if it has a coordinate for the purpose of sorting that is in the query region".
@@ -312,5 +321,51 @@ public final class ReadsSparkSource implements Serializable {
             }
         }
         return false;
+    }
+
+    private static class TraversalParametersOverlapDetector {
+        final TraversalParameters traversalParameters;
+        private OverlapDetector<SimpleInterval> overlapDetector;
+        private final boolean emptyIntervals;
+
+        public TraversalParametersOverlapDetector(final TraversalParameters traversalParameters) {
+            this.traversalParameters = traversalParameters;
+            if (traversalParameters != null) {
+                final List<SimpleInterval> intervals = traversalParameters.getIntervalsForTraversal();
+                overlapDetector = OverlapDetector.create(intervals);
+                emptyIntervals = intervals.isEmpty();
+            } else {
+                emptyIntervals = true;
+            }
+
+
+
+
+        }
+
+        public boolean samRecordOverlaps(final SAMRecord record) {
+            if (traversalParameters == null) {
+                return true;
+            } else if (traversalParameters.traverseUnmappedReads() && record.getReadUnmappedFlag() && record.getAlignmentStart() == SAMRecord.NO_ALIGNMENT_START) {
+                return true; // include record if unmapped records should be traversed and record is unmapped
+            } else if (emptyIntervals) {
+                return false; // no intervals means 'no mapped reads'
+            }
+
+            // This follows the behavior of htsjdk's SamReader which states that "an unmapped read will be returned
+            // by this call if it has a coordinate for the purpose of sorting that is in the query region".
+            final Locatable loc = record.getReadUnmappedFlag() && record.getAlignmentStart() != SAMRecord.NO_ALIGNMENT_START ?
+                    new SimpleInterval(record.getContig())
+            for (SimpleInterval interval : intervals) {
+                if (record.getReadUnmappedFlag() && record.getAlignmentStart() != SAMRecord.NO_ALIGNMENT_START) {
+
+                    int start = record.getAlignmentStart();
+                    return interval.getStart() <= start && interval.getEnd() >= start;
+                } else  if (interval.overlaps(record)) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 }

@@ -28,7 +28,7 @@ public class TraversalParameters implements Serializable{
     }
 
     /**
-     * @return List of intervals for traversal. Only records overlapping these intervals will be returned.
+     * @return never {@code null}.  List of intervals for traversal. Only records overlapping these intervals will be returned.
      */
     public List<SimpleInterval> getIntervalsForTraversal() {
         return Collections.unmodifiableList(intervalsForTraversal);
