@@ -1,7 +1,6 @@
 package org.broadinstitute.hellbender.tools.copynumber.utils.segmentation;
 
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
-import org.apache.commons.math3.linear.DefaultRealMatrixChangingVisitor;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.linear.SingularValueDecomposition;
 import org.apache.commons.math3.random.RandomGenerator;
@@ -13,6 +12,9 @@ import org.broadinstitute.hellbender.utils.IndexRange;
 import org.broadinstitute.hellbender.utils.MathUtils;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
+import org.ojalgo.commons.math3.linear.Access2DWrapper;
+import org.ojalgo.matrix.BasicMatrix;
+import org.ojalgo.matrix.PrimitiveMatrix;
 
 import java.util.*;
 import java.util.function.BiFunction;
@@ -222,21 +224,23 @@ public final class KernelSegmenter<DATA> {
         //calculate reduced observation matrix
         logger.debug(String.format("Calculating reduced observation matrix (%d x %d)...", data.size(), numSubsample));
         final double[] invSqrtSingularValues = Arrays.stream(svd.getSingularValues()).map(Math::sqrt).map(x -> 1. / (x + EPSILON)).toArray();
-        final RealMatrix subKernelUMatrix = new Array2DRowRealMatrix(numSubsample, numSubsample);
-        subKernelUMatrix.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
-            @Override
-            public double visit(int i, int j, double value) {
-                return svd.getU().getEntry(i, j) * invSqrtSingularValues[j];
+        //OjAlgo multiply is faster than Apache Commons, so we use OjAlgo matrices here
+        final BasicMatrix.Builder<PrimitiveMatrix> subKernelUMatrixBuilder = PrimitiveMatrix.FACTORY.getBuilder(numSubsample, numSubsample);
+        for (int i = 0; i < numSubsample; i++) {
+            for (int j = 0; j < numSubsample; j++) {
+                subKernelUMatrixBuilder.set(i, j, svd.getU().getEntry(i, j) * invSqrtSingularValues[j]);
             }
-        });
-        final RealMatrix reducedKernelMatrix = new Array2DRowRealMatrix(data.size(), numSubsample);
-        reducedKernelMatrix.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
-            @Override
-            public double visit(int i, int j, double value) {
-                return kernel.apply(data.get(i), dataSubsample.get(j));
+        }
+        final PrimitiveMatrix subKernelUMatrix = subKernelUMatrixBuilder.get();
+        final BasicMatrix.Builder<PrimitiveMatrix> reducedKernelMatrixBuilder = PrimitiveMatrix.FACTORY.getBuilder(data.size(), numSubsample);
+        for (int i = 0; i < data.size(); i++) {
+            final DATA datum = data.get(i);
+            for (int j = 0; j < numSubsample; j++) {
+                reducedKernelMatrixBuilder.set(i, j, kernel.apply(datum, dataSubsample.get(j)));
             }
-        });
-        return reducedKernelMatrix.multiply(subKernelUMatrix);
+        }
+        final PrimitiveMatrix reducedKernelMatrix = reducedKernelMatrixBuilder.get();
+        return Access2DWrapper.of(reducedKernelMatrix.multiply(subKernelUMatrix)).copy();   //Access2DWrapper adds overhead, so we create a RealMatrix using copy
     }
 
     //for N x p matrix Z_ij, returns the N-dimensional vector sum(Z_ij * Z_ij, j = 0,..., p - 1),
