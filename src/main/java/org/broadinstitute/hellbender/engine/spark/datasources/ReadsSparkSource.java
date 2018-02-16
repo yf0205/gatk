@@ -116,9 +116,12 @@ public final class ReadsSparkSource implements Serializable {
                 readFileName, AnySAMInputFormat.class, LongWritable.class, SAMRecordWritable.class,
                 conf);
 
+        // overlap detector is only needed for SAM since in bam it is done by the input format
+        final TraversalParametersOverlapDetector overlapDetector = isBam ? null : new TraversalParametersOverlapDetector(traversalParameters);
+
         JavaRDD<GATKRead> reads= rdd2.map(v1 -> {
             SAMRecord sam = v1._2().get();
-            if (isBam || samRecordOverlaps(sam, traversalParameters)) { // don't check overlaps for BAM since it is done by input format
+            if (isBam || overlapDetector.samRecordOverlaps(sam)) { // don't check overlaps for BAM since it is done by input format
                 return (GATKRead) SAMRecordToGATKReadAdapter.headerlessReadAdapter(sam);
             }
             return null;
@@ -169,7 +172,8 @@ public final class ReadsSparkSource implements Serializable {
                 inputPath, AvroParquetInputFormat.class, Void.class, AlignmentRecord.class, job.getConfiguration())
                 .values();
         JavaRDD<GATKRead> readsRdd = recordsRdd.map(record -> new BDGAlignmentRecordToGATKReadAdapter(record, bHeader.getValue()));
-        JavaRDD<GATKRead> filteredRdd = readsRdd.filter(record -> samRecordOverlaps(record.convertToSAMRecord(header), traversalParameters));
+        final TraversalParametersOverlapDetector overlapDetector = new TraversalParametersOverlapDetector(traversalParameters);
+        JavaRDD<GATKRead> filteredRdd = readsRdd.filter(record -> overlapDetector.samRecordOverlaps(record.convertToSAMRecord(header)));
         return putPairsInSamePartition(header, filteredRdd);
     }
 
@@ -287,44 +291,23 @@ public final class ReadsSparkSource implements Serializable {
             }
         }
     }
-
-    /**
-     * Tests if a given SAMRecord overlaps any interval in a collection. This is only used as a fallback option for
-     * formats that don't support query-by-interval natively at the Hadoop-BAM layer.
-     */
-    //TODO: use OverlapDetector, see https://github.com/broadinstitute/gatk/issues/1531
-    private static boolean samRecordOverlaps(final SAMRecord record, final TraversalParameters traversalParameters ) {
-        if (traversalParameters == null) {
-            return true;
-        } else if (traversalParameters.traverseUnmappedReads() && record.getReadUnmappedFlag() && record.getAlignmentStart() == SAMRecord.NO_ALIGNMENT_START) {
-            return true; // include record if unmapped records should be traversed and record is unmapped
-        }
-        List<SimpleInterval> intervals = traversalParameters.getIntervalsForTraversal();
-        if (intervals == null || intervals.isEmpty()) {
-            return false; // no intervals means 'no mapped reads'
-        }
-        for (SimpleInterval interval : intervals) {
-            if (interval.overlaps(record)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
+    
     private static class TraversalParametersOverlapDetector {
-        final TraversalParameters traversalParameters;
-        private OverlapDetector<SimpleInterval> overlapDetector;
-        private final boolean emptyIntervals;
+        private final OverlapDetector<SimpleInterval> overlapDetector;
+        private final boolean keepEverything;
+        private final boolean keepUnmapped;
 
         public TraversalParametersOverlapDetector(final TraversalParameters traversalParameters) {
-            this.traversalParameters = traversalParameters;
-            if (traversalParameters != null) {
-                final List<SimpleInterval> intervals = traversalParameters.getIntervalsForTraversal();
-                overlapDetector = OverlapDetector.create(intervals);
-                emptyIntervals = intervals.isEmpty();
-            } else {
-                emptyIntervals = true;
-            }
+            keepEverything = traversalParameters == null;
+            keepUnmapped = keepEverything || traversalParameters.traverseUnmappedReads();
+            overlapDetector = traversalParameters == null ? null :
+                    OverlapDetector.create(traversalParameters.getIntervalsForTraversal());
+        }
+
+        public boolean samRecordOverlaps(final SAMRecord record) {
+            return keepEverything ||
+                    keepUnmapped && record.getReadUnmappedFlag() && record.getAlignmentStart() == SAMRecord.NO_ALIGNMENT_START ||
+                    overlapDetector.overlapsAny(record);
         }
     }
 }
