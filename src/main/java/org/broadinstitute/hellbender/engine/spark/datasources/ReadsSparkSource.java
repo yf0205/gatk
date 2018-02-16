@@ -296,8 +296,7 @@ public final class ReadsSparkSource implements Serializable {
     private static boolean samRecordOverlaps(final SAMRecord record, final TraversalParameters traversalParameters ) {
         if (traversalParameters == null) {
             return true;
-        }
-        if (traversalParameters.traverseUnmappedReads() && record.getReadUnmappedFlag() && record.getAlignmentStart() == SAMRecord.NO_ALIGNMENT_START) {
+        } else if (traversalParameters.traverseUnmappedReads() && record.getReadUnmappedFlag() && record.getAlignmentStart() == SAMRecord.NO_ALIGNMENT_START) {
             return true; // include record if unmapped records should be traversed and record is unmapped
         }
         List<SimpleInterval> intervals = traversalParameters.getIntervalsForTraversal();
@@ -305,18 +304,7 @@ public final class ReadsSparkSource implements Serializable {
             return false; // no intervals means 'no mapped reads'
         }
         for (SimpleInterval interval : intervals) {
-
-
-            //TODO: need to ask Louis about the logic here.
-            // TODO: if the read has the unmapped flag, getContig is null, but here it seems that we're querying based only on start and end
-            // TODO: and assuming that the contig just works out
-            // TODO: this is especially weird because the intervals in traversalParameters may have many different contigs!
-            if (record.getReadUnmappedFlag() && record.getAlignmentStart() != SAMRecord.NO_ALIGNMENT_START) {
-                // This follows the behavior of htsjdk's SamReader which states that "an unmapped read will be returned
-                // by this call if it has a coordinate for the purpose of sorting that is in the query region".
-                int start = record.getAlignmentStart();
-                return interval.getStart() <= start && interval.getEnd() >= start;
-            } else  if (interval.overlaps(record)) {
+            if (interval.overlaps(record)) {
                 return true;
             }
         }
@@ -337,35 +325,6 @@ public final class ReadsSparkSource implements Serializable {
             } else {
                 emptyIntervals = true;
             }
-
-
-
-
-        }
-
-        public boolean samRecordOverlaps(final SAMRecord record) {
-            if (traversalParameters == null) {
-                return true;
-            } else if (traversalParameters.traverseUnmappedReads() && record.getReadUnmappedFlag() && record.getAlignmentStart() == SAMRecord.NO_ALIGNMENT_START) {
-                return true; // include record if unmapped records should be traversed and record is unmapped
-            } else if (emptyIntervals) {
-                return false; // no intervals means 'no mapped reads'
-            }
-
-            // This follows the behavior of htsjdk's SamReader which states that "an unmapped read will be returned
-            // by this call if it has a coordinate for the purpose of sorting that is in the query region".
-            final Locatable loc = record.getReadUnmappedFlag() && record.getAlignmentStart() != SAMRecord.NO_ALIGNMENT_START ?
-                    new SimpleInterval(record.getContig())
-            for (SimpleInterval interval : intervals) {
-                if (record.getReadUnmappedFlag() && record.getAlignmentStart() != SAMRecord.NO_ALIGNMENT_START) {
-
-                    int start = record.getAlignmentStart();
-                    return interval.getStart() <= start && interval.getEnd() >= start;
-                } else  if (interval.overlaps(record)) {
-                    return true;
-                }
-            }
-            return false;
         }
     }
 }
