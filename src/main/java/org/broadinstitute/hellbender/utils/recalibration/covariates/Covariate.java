@@ -10,7 +10,7 @@ import java.io.Serializable;
  * In general most error checking and adjustments to the data are done before the call to the covariates getValue methods in order to speed up the code.
  * This unfortunately muddies the code, but most of these corrections can be done per read while the covariates get called per base, resulting in a big speed up.
  *
- * Covariates are immutable objects after construction. All state setting and parameterization must happen during the construction call.
+ * Covariates are immutable objects after construction. All state setting and parametrization must happen during the construction call.
  */
 public interface Covariate extends Serializable {
     public static long serialVersionUID = 1L;

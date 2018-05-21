@@ -83,7 +83,7 @@ import java.util.stream.Collectors;
  *      to a previously obtained coverage model parametrization can be provided via the {@code model} argument
  *      in the COHORT mode, in which case, the provided parameters will be only used for model initialization and
  *      a new parametrization will be generated based on the input count files. Furthermore, the genomic intervals are
- *      set to those used in creating the previous parameterization and interval-related arguments will be ignored.
+ *      set to those used in creating the previous parametrization and interval-related arguments will be ignored.
  *      Note that the newly obtained parametrization ultimately reflects the input count files from the last run,
  *      regardless of whether or not an initialization parameter set is given. If the users wishes to model coverage
  *      data from two or more cohorts simultaneously, all of the input counts files must be given to the tool at once.

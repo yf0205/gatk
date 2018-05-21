@@ -127,7 +127,7 @@ import java.util.stream.Collectors;
  *     events and mosaicism (e.g., sex chromosome loss and somatic trisomy) will naturally lead to unreliable
  *     results. We strongly recommended inspecting genotyping qualities (GQ) from the tool output and considering to drop
  *     low-GQ contigs in downstream analyses. Finally, given the Bayesian status of this tool, we suggest including as many
- *     high-quality germline samples as possible for ploidy model parametrizaton in the COHORT mode. This will downplay
+ *     high-quality germline samples as possible for ploidy model parametrization in the COHORT mode. This will downplay
  *     the role of questionable samples and will yield a more reliable estimation of genuine sequencing biases.</p></dd>
  *
  *     <dt>Coverage-based germline karyotyping:</dt>

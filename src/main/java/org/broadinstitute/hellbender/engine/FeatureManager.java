@@ -226,7 +226,7 @@ public final class FeatureManager implements AutoCloseable {
 
     /**
      * Helper method for {@link #getFeatureTypeForFeatureInputField(Field)} that "unpacks" a
-     * parameterized type by one level of parameterization. Eg., given List<FeatureInput<VariantContext>>
+     * parameterized type by one level of parametrization. Eg., given List<FeatureInput<VariantContext>>
      * would return FeatureInput<VariantContext>.
      *
      * @param parameterizedType parameterized type to unpack
