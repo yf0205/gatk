@@ -291,7 +291,7 @@ public abstract class GATKSparkTool extends SparkCommandLineProgram {
      * @param reads reads to write.
      */
     public void writeReads(final JavaSparkContext ctx, final String outputFile, JavaRDD<GATKRead> reads) {
-        writeReads(ctx, outputFile, reads, readsHeader);
+        writeReads(ctx, outputFile, reads, readsHeader, true);
     }
 
     /**
@@ -301,12 +301,12 @@ public abstract class GATKSparkTool extends SparkCommandLineProgram {
      * @param reads reads to write.
      * @param header the header to write.
      */
-    public void writeReads(final JavaSparkContext ctx, final String outputFile, JavaRDD<GATKRead> reads, SAMFileHeader header) {
+    public void writeReads(final JavaSparkContext ctx, final String outputFile, JavaRDD<GATKRead> reads, SAMFileHeader header, final boolean sortReadsToHeader) {
         try {
             ReadsSparkSink.writeReads(ctx, outputFile,
                     hasReference() ? referenceArguments.getReferencePath().toAbsolutePath().toUri().toString() : null,
                     reads, header, shardedOutput ? ReadsWriteFormat.SHARDED : ReadsWriteFormat.SINGLE,
-                    getRecommendedNumReducers(), shardedPartsDir);
+                    getRecommendedNumReducers(), shardedPartsDir, sortReadsToHeader);
         } catch (IOException e) {
             throw new UserException.CouldNotCreateOutputFile(outputFile,"writing failed", e);
         }
