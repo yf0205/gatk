@@ -10,11 +10,6 @@ import htsjdk.variant.variantcontext.writer.Options;
 import htsjdk.variant.variantcontext.writer.VariantContextWriter;
 import htsjdk.variant.vcf.VCFHeaderLine;
 import htsjdk.variant.vcf.VCFSimpleHeaderLine;
-import java.io.File;
-import java.nio.file.Path;
-import java.time.ZonedDateTime;
-import java.util.*;
-import java.util.stream.Stream;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.ArgumentCollection;
 import org.broadinstitute.barclay.argparser.CommandLinePluginDescriptor;
@@ -42,6 +37,12 @@ import org.broadinstitute.hellbender.utils.read.ReadUtils;
 import org.broadinstitute.hellbender.utils.read.SAMFileGATKReadWriter;
 import org.broadinstitute.hellbender.utils.reference.ReferenceUtils;
 import org.broadinstitute.hellbender.utils.variant.GATKVariantContextUtils;
+
+import java.io.File;
+import java.nio.file.Path;
+import java.time.ZonedDateTime;
+import java.util.*;
+import java.util.stream.Stream;
 
 /**
  * Base class for all GATK tools. Tool authors that wish to write a "GATK" tool but not use one of
@@ -156,6 +157,45 @@ public abstract class GATKTool extends CommandLineProgram {
      * their particular driving data source.
      */
     List<SimpleInterval> intervalsForTraversal;
+
+    /**
+     * Get the {@link ReferenceDataSource} for this {@link GATKTool}.
+     * Will throw a {@link GATKException} if the reference is null.
+     * Clients are expected to call the {@link #hasReference()} method prior to calling this.
+     * @return the {@link ReferenceDataSource} for this {@link GATKTool}.  Never {@code null}.
+     */
+    protected ReferenceDataSource getReferenceDataSource() {
+        if ( reference == null ) {
+            throw new GATKException("Attempted to retrieve null reference!");
+        }
+        return reference;
+    }
+
+    /**
+     * Get the {@link ReadsDataSource} for this {@link GATKTool}.
+     * Will throw a {@link GATKException} if the reads are null.
+     * Clients are expected to call the {@link #hasReads()} method prior to calling this.
+     * @return the {@link ReadsDataSource} for this {@link GATKTool}.  Never {@code null}.
+     */
+    protected ReadsDataSource getReadsDataSource() {
+        if ( reads == null ) {
+            throw new GATKException("Attempted to retrieve null reads!");
+        }
+        return reads;
+    }
+
+    /**
+     * Get the {@link FeatureManager} for this {@link GATKTool}.
+     * Will throw a {@link GATKException} if the features are null.
+     * Clients are expected to call the {@link #hasFeatures()} method prior to calling this.
+     * @return the {@link FeatureManager} for this {@link GATKTool}.  Never {@code null}.
+     */
+    protected FeatureManager getFeatureManager() {
+        if ( features == null ) {
+            throw new GATKException("Attempted to retrieve null features!");
+        }
+        return features;
+    }
 
     /**
      * Progress meter to print out traversal statistics. Subclasses must invoke

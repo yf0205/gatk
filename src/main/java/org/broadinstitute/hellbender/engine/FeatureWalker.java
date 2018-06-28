@@ -8,7 +8,6 @@ import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 
 import java.io.File;
-import java.nio.file.Path;
 
 /**
  * A FeatureWalker is a tool that processes a {@link Feature} at a time from a source of Features, with
@@ -21,7 +20,7 @@ import java.nio.file.Path;
  *
  * @param <F> the driving feature type.
  */
-public abstract class FeatureWalker<F extends Feature> extends GATKTool {
+public abstract class FeatureWalker<F extends Feature> extends Walker {
 
     private FeatureDataSource<F> drivingFeatures;
 
@@ -79,7 +78,7 @@ public abstract class FeatureWalker<F extends Feature> extends GATKTool {
      * Subclasses can override to provide their own behavior but default implementation should be suitable for most uses.
      */
     @Override
-    public void traverse() {
+    public final void traverse() {
         CountingReadFilter readFilter = makeReadFilter();
         // Process each feature in the input stream.
         Utils.stream(drivingFeatures).forEach(feature -> {

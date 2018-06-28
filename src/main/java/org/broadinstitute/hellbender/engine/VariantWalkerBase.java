@@ -22,7 +22,7 @@ import java.util.stream.StreamSupport;
  * {@link #getSpliteratorForDrivingVariants}, and may optionally implement {@link #onTraversalStart},
  * {@link #onTraversalSuccess} and/or {@link #closeTool}.
  */
-public abstract class VariantWalkerBase extends GATKTool {
+public abstract class VariantWalkerBase extends Walker {
 
     /**
      * This number controls the size of the cache for our primary and auxiliary FeatureInputs

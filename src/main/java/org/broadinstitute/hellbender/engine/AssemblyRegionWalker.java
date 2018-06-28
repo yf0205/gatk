@@ -1,6 +1,5 @@
 package org.broadinstitute.hellbender.engine;
 
-import htsjdk.samtools.util.Locatable;
 import org.broadinstitute.barclay.argparser.Advanced;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.CommandLineException;
@@ -12,13 +11,10 @@ import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.IGVUtils;
 import org.broadinstitute.hellbender.utils.IntervalUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
-import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.activityprofile.ActivityProfileState;
 import org.broadinstitute.hellbender.utils.downsampling.PositionalDownsampler;
 import org.broadinstitute.hellbender.utils.downsampling.ReadsDownsampler;
-import org.broadinstitute.hellbender.utils.read.GATKRead;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -43,7 +39,7 @@ import java.util.List;
  * Internally, the reads are loaded in chunks called read shards, which are then subdivided into active/inactive regions
  * for processing by the tool implementation. One read shard is created per contig.
  */
-public abstract class AssemblyRegionWalker extends GATKTool {
+public abstract class AssemblyRegionWalker extends Walker {
 
     //NOTE: these argument names are referenced by HaplotypeCallerSpark
     public static final String MIN_ASSEMBLY_LONG_NAME = "min-assembly-region-size";

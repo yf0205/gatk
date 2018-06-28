@@ -3,8 +3,6 @@ package org.broadinstitute.hellbender.engine;
 import org.broadinstitute.hellbender.engine.filters.ReadFilter;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 
-import java.nio.file.Path;
-
 /**
  * An IntervalWalker is a tool that processes a single interval at a time, with the ability to query
  * optional overlapping sources of reads, reference data, and/or variants/features.
@@ -18,7 +16,7 @@ import java.nio.file.Path;
  * onTraversalStart() and/or onTraversalSuccess(). See the {@link org.broadinstitute.hellbender.tools.examples.ExampleIntervalWalker}
  * tool for an example.
  */
-public abstract class IntervalWalker extends GATKTool {
+public abstract class IntervalWalker extends Walker {
 
     @Override
     public boolean requiresIntervals() {
@@ -56,7 +54,7 @@ public abstract class IntervalWalker extends GATKTool {
     }
 
     @Override
-    public void traverse() {
+    public final void traverse() {
         final ReadFilter readFilter = makeReadFilter();
         for ( final SimpleInterval interval : intervalsForTraversal ) {
             apply(interval,
