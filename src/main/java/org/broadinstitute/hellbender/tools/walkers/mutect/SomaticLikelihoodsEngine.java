@@ -1,15 +1,11 @@
 package org.broadinstitute.hellbender.tools.walkers.mutect;
 
 import com.google.common.annotations.VisibleForTesting;
-import htsjdk.variant.variantcontext.Allele;
 import org.apache.commons.math3.linear.RealMatrix;
-import org.apache.commons.math3.special.Gamma;
 import org.apache.commons.math3.util.MathArrays;
 import org.broadinstitute.hellbender.utils.*;
-import org.broadinstitute.hellbender.utils.genotyper.LikelihoodMatrix;
 
 import java.util.Arrays;
-import java.util.Collections;
 
 /**
  * Created by David Benjamin on 3/9/17.
@@ -22,43 +18,37 @@ public class SomaticLikelihoodsEngine {
      * Given a likelihoods matrix, calculate the parameters of the Dirichlet posterior distribution on their allele
      * fractions, which define a discrete distribution.
      * @param log10Likelihoods matrix of alleles x reads
-     * @param priorPseudocounts
+     * @param prior
      */
-    public static double[] alleleFractionsPosterior(final RealMatrix log10Likelihoods, final double[] priorPseudocounts) {
+    @VisibleForTesting
+    static Dirichlet alleleFractionsPosterior(final RealMatrix log10Likelihoods, final Dirichlet prior) {
         final int numberOfAlleles = log10Likelihoods.getRowDimension();
-        Utils.validateArg(numberOfAlleles == priorPseudocounts.length, "Must have one pseudocount per allele.");
+        Utils.validateArg(numberOfAlleles == prior.dimension(), "Must have one pseudocount per allele.");
 
-        double[] dirichletPosterior = new IndexRange(0, numberOfAlleles).mapToDouble(n -> 1.0);  // initialize flat posterior
+        Dirichlet posterior = Dirichlet.flat(numberOfAlleles);
         boolean converged = false;
 
         while(!converged) {
             // alleleCounts = \sum_r \bar{z}_r, where \bar{z}_r is an a-dimensional vector of the expectation of z_r with respect to q(f)
-            final double[] alleleCounts = getEffectiveCounts(log10Likelihoods, dirichletPosterior);
-            final double[] newDirichletPosterior = MathArrays.ebeAdd(alleleCounts, priorPseudocounts);
-            converged = MathArrays.distance1(dirichletPosterior, newDirichletPosterior) < CONVERGENCE_THRESHOLD;
-            dirichletPosterior = newDirichletPosterior;
+            final double[] alleleCounts = getEffectiveCounts(log10Likelihoods, posterior);
+            final Dirichlet newPosterior = prior.addCounts(alleleCounts);
+            converged = newPosterior.distance1(posterior) < CONVERGENCE_THRESHOLD;
+            posterior = newPosterior;
         }
 
-        return dirichletPosterior;
+        return posterior;
     }
-
-    //same with flat prior
-    public static double[] alleleFractionsPosterior(final RealMatrix log10Likelihoods) {
-        final double[] flatPrior = new IndexRange(0, log10Likelihoods.getRowDimension()).mapToDouble(n -> 1);
-        return alleleFractionsPosterior(log10Likelihoods, flatPrior);
-    }
-
 
     /**
      * Given data log likelihoods and a Dirichlet prior for a categorical distribution, obtain the array of total
      * responsibilities for each category
      * @param log10Likelihoods
-     * @param dirichletPrior
+     * @param prior Dirichlet prior on allele fractions
      * @return
      */
     @VisibleForTesting
-    protected static double[] getEffectiveCounts(RealMatrix log10Likelihoods, double[] dirichletPrior) {
-        final double[] effectiveLog10Weights = new Dirichlet(dirichletPrior).effectiveLog10MultinomialWeights();
+    protected static double[] getEffectiveCounts(RealMatrix log10Likelihoods, final Dirichlet prior) {
+        final double[] effectiveLog10Weights = prior.effectiveLog10MultinomialWeights();
         return MathUtils.sumArrayFunction(0, log10Likelihoods.getColumnDimension(),
                 read -> MathUtils.posteriors(effectiveLog10Weights, log10Likelihoods.getColumn(read)));
     }
@@ -66,43 +56,39 @@ public class SomaticLikelihoodsEngine {
 
     /**
      * @param log10Likelihoods matrix of alleles x reads
-     * @param priorPseudocounts
+     * @param prior Dirichlet prior on allele fractions
      */
-    public static double log10Evidence(final RealMatrix log10Likelihoods, final double[] priorPseudocounts) {
-        final int numberOfAlleles = log10Likelihoods.getRowDimension();
-        Utils.validateArg(numberOfAlleles == priorPseudocounts.length, "Must have one pseudocount per allele.");
-        final double[] alleleFractionsPosterior = alleleFractionsPosterior(log10Likelihoods, priorPseudocounts);
-        final double priorContribution = log10DirichletNormalization(priorPseudocounts);
-        final double posteriorContribution = -log10DirichletNormalization(alleleFractionsPosterior);
+    @VisibleForTesting
+    static double log10Evidence(final RealMatrix log10Likelihoods, final Dirichlet prior) {
+        Utils.validateArg(log10Likelihoods.getRowDimension() == prior.dimension(), "Must have one pseudocount per allele.");
+        final Dirichlet posterior = alleleFractionsPosterior(log10Likelihoods, prior);
 
-        final double[] log10AlleleFractions = new Dirichlet(alleleFractionsPosterior).effectiveLog10MultinomialWeights();
-
+        final double[] log10AlleleFractions = posterior.effectiveLog10MultinomialWeights();
         final double likelihoodsAndEntropyContribution = new IndexRange(0, log10Likelihoods.getColumnDimension()).sum(r -> {
             final double[] log10LikelihoodsForRead = log10Likelihoods.getColumn(r);
             final double[] responsibilities = MathUtils.posteriors(log10AlleleFractions, log10LikelihoodsForRead);
-            final double likelihoodsContribution = MathUtils.sum(MathArrays.ebeMultiply(log10LikelihoodsForRead, responsibilities));
-            final double entropyContribution = Arrays.stream(responsibilities).map(SomaticLikelihoodsEngine::xLog10x).sum();
-            return likelihoodsContribution - entropyContribution;
+            final double likelihoodsTerm = MathUtils.sum(MathArrays.ebeMultiply(log10LikelihoodsForRead, responsibilities));
+            final double entropyTerm = Arrays.stream(responsibilities).map(MathUtils::xLog10x).sum();
+            return likelihoodsTerm - entropyTerm;
 
         });
 
-        return priorContribution + posteriorContribution + likelihoodsAndEntropyContribution;
+        return prior.log10Normalization() + -posterior.log10Normalization() + likelihoodsAndEntropyContribution;
     }
 
     // same as above using the default flat prior
     public static double log10Evidence(final RealMatrix log10Likelihoods) {
-        final double[] flatPrior = new IndexRange(0, log10Likelihoods.getRowDimension()).mapToDouble(n -> 1);
-        return log10Evidence(log10Likelihoods, flatPrior);
+        return log10Evidence(log10Likelihoods, Dirichlet.flat(log10Likelihoods.getRowDimension()));
     }
 
-    private static double xLog10x(final double x) {
-        return x < 1e-8 ? 0 : x * Math.log10(x);
-    }
+    // correct the log 10 odds originally output by Mutect2, which assumed a flat prior, to approximate
+    // the log 10 odds one would obtain from using a different, non-flat prior
+    public static double log10OddsCorrection(final Dirichlet newPrior, final Dirichlet oldPrior, final double[] counts) {
+        Utils.validateArg(newPrior.dimension() == oldPrior.dimension(), "Priors must have same dimensions");
+        Utils.validateArg(newPrior.dimension() == counts.length, "Priors must have same dimensions as counts.");
 
-    public static double log10DirichletNormalization(final double[] dirichletParams) {
-        final double logNumerator = Gamma.logGamma(MathUtils.sum(dirichletParams));
-        final double logDenominator = MathUtils.sum(MathUtils.applyToArray(dirichletParams, Gamma::logGamma));
-        return MathUtils.logToLog10(logNumerator - logDenominator);
+        final double oldValue = oldPrior.log10Normalization() - oldPrior.addCounts(counts).log10Normalization();
+        final double newValue = newPrior.log10Normalization() - newPrior.addCounts(counts).log10Normalization();
+        return newValue - oldValue;
     }
-
 }

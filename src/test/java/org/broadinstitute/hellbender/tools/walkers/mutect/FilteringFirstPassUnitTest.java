@@ -1,12 +1,10 @@
 package org.broadinstitute.hellbender.tools.walkers.mutect;
 
 import org.broadinstitute.hellbender.utils.test.BaseTest;
+import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
 import org.testng.Assert;
-import org.testng.annotations.BeforeSuite;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
-
-import java.util.Optional;
 
 public class FilteringFirstPassUnitTest extends BaseTest {
     @DataProvider(name = "falsePositiveRateData")
@@ -26,7 +24,7 @@ public class FilteringFirstPassUnitTest extends BaseTest {
     public void testCalculateThresholdForReadOrientationFilter(final double[] posteriors,
                                                                final double maxErrorRate,
                                                                final double expectedThreshold){
-        final FilteringFirstPass.FilterStats stats = FilteringFirstPass.calculateThresholdForReadOrientationFilter(posteriors, maxErrorRate);
+        final FilteringFirstPass.FilterStats stats = FilteringFirstPass.calculateFilterThreshold(posteriors, maxErrorRate, "DUMMY_FILTER");
         Assert.assertEquals(stats.getThreshold(), expectedThreshold);
     }
 

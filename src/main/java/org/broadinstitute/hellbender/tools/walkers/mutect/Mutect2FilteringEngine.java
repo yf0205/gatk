@@ -67,7 +67,7 @@ public class Mutect2FilteringEngine {
     private void applyTriallelicFilter(final VariantContext vc, final FilterResult filterResult) {
         if (vc.hasAttribute(GATKVCFConstants.TUMOR_LOD_KEY)) {
             final double[] tumorLods = getDoubleArrayAttribute(vc, GATKVCFConstants.TUMOR_LOD_KEY);
-            final long numPassingAltAlleles = Arrays.stream(tumorLods).filter(x -> x > MTFAC.TUMOR_LOD_THRESHOLD).count();
+            final long numPassingAltAlleles = Arrays.stream(tumorLods).filter(x -> x > MTFAC.firstPassTumorLod).count();
 
             if (numPassingAltAlleles > MTFAC.numAltAllelesThreshold) {
                 filterResult.addFilter(GATKVCFConstants.MULTIALLELIC_FILTER_NAME);
@@ -184,13 +184,24 @@ public class Mutect2FilteringEngine {
         }
     }
 
-    private static void applyInsufficientEvidenceFilter(final M2FiltersArgumentCollection MTFAC, final VariantContext vc, final FilterResult filterResult) {
-        if (vc.hasAttribute(GATKVCFConstants.TUMOR_LOD_KEY)) {
-            final double[] tumorLods = getDoubleArrayAttribute(vc, GATKVCFConstants.TUMOR_LOD_KEY);
+    private void applyInsufficientEvidenceFilter(final M2FiltersArgumentCollection MTFAC, final VariantContext vc, final FilterResult filterResult, final Optional<FilteringFirstPass> firstPass) {
+        if (!vc.hasAttribute(GATKVCFConstants.TUMOR_LOD_KEY)) {
+            return;
+        }
 
-            if (MathUtils.arrayMax(tumorLods) < MTFAC.TUMOR_LOD_THRESHOLD) {
+        final double[] tumorLods = getDoubleArrayAttribute(vc, GATKVCFConstants.TUMOR_LOD_KEY);
+        final int indexOfMaxTumorLod = MathUtils.maxElementIndex(tumorLods);
+        Genotype tumorGenotype = vc.getGenotype(tumorSample);
+        final int[] tumorAlleleDepths = tumorGenotype.getAD();
+
+        // on first pass, just apply a threshold
+        // on second pass, use the learned clustering
+        if (firstPass.isPresent()) {
+            if (!firstPass.get().passesLodThreshold(tumorLods[indexOfMaxTumorLod], tumorAlleleDepths[0], tumorAlleleDepths[indexOfMaxTumorLod + 1])) {
                 filterResult.addFilter(GATKVCFConstants.TUMOR_LOD_FILTER_NAME);
             }
+        } else if (MathUtils.arrayMax(tumorLods) < MTFAC.firstPassTumorLod) {
+                filterResult.addFilter(GATKVCFConstants.TUMOR_LOD_FILTER_NAME);
         }
     }
 
@@ -242,7 +253,7 @@ public class Mutect2FilteringEngine {
         }
     }
 
-    private static double[] getDoubleArrayAttribute(final VariantContext vc, final String attribute) {
+    public static double[] getDoubleArrayAttribute(final VariantContext vc, final String attribute) {
         return GATKProtectedVariantContextUtils.getAttributeAsDoubleArray(vc, attribute, () -> null, -1);
     }
 
@@ -329,7 +340,6 @@ public class Mutect2FilteringEngine {
         firstPass.ifPresent(ffp -> Utils.validate(ffp.isReadyForSecondPass(), "First pass information has not been processed into a model for the second pass."));
         final FilterResult filterResult = new FilterResult();
         applyFilteredHaplotypeFilter(MTFAC, vc, filterResult, firstPass);
-        applyInsufficientEvidenceFilter(MTFAC, vc, filterResult);
         applyClusteredEventFilter(vc, filterResult);
         applyDuplicatedAltReadFilter(MTFAC, vc, filterResult);
         applyTriallelicFilter(vc, filterResult);
@@ -343,6 +353,7 @@ public class Mutect2FilteringEngine {
         applyMappingQualityFilter(MTFAC, vc, filterResult);
         applyMedianFragmentLengthDifferenceFilter(MTFAC, vc, filterResult);
         applyReadPositionFilter(MTFAC, vc, filterResult);
+        applyInsufficientEvidenceFilter(MTFAC, vc, filterResult, firstPass);
 
         // The following filters use the information gathered during the first pass
         applyReadOrientationFilter(vc, filterResult, firstPass);

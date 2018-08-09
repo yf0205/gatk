@@ -16,7 +16,10 @@ import org.broadinstitute.hellbender.tools.walkers.genotyper.afcalc.AFCalculator
 import org.broadinstitute.hellbender.tools.walkers.haplotypecaller.AssemblyBasedCallerGenotypingEngine;
 import org.broadinstitute.hellbender.tools.walkers.haplotypecaller.AssemblyBasedCallerUtils;
 import org.broadinstitute.hellbender.tools.walkers.haplotypecaller.AssemblyResultSet;
-import org.broadinstitute.hellbender.utils.*;
+import org.broadinstitute.hellbender.utils.IndexRange;
+import org.broadinstitute.hellbender.utils.MathUtils;
+import org.broadinstitute.hellbender.utils.SimpleInterval;
+import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.genotyper.LikelihoodMatrix;
 import org.broadinstitute.hellbender.utils.genotyper.ReadLikelihoods;
 import org.broadinstitute.hellbender.utils.genotyper.SampleList;
@@ -24,23 +27,19 @@ import org.broadinstitute.hellbender.utils.haplotype.Haplotype;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
 import org.broadinstitute.hellbender.utils.read.ReadUtils;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
+import org.broadinstitute.hellbender.utils.variant.GATKVariantContextUtils;
 
 import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.broadinstitute.hellbender.utils.MathUtils;
-import org.broadinstitute.hellbender.utils.variant.GATKVariantContextUtils;
-
-import static org.broadinstitute.hellbender.utils.OptimizationUtils.argmax;
-
 public class SomaticGenotypingEngine extends AssemblyBasedCallerGenotypingEngine {
 
     private final M2ArgumentCollection MTAC;
-    public final String tumorSample;
+    private final String tumorSample;
     private final String normalSample;
-    final boolean hasNormal;
+    private final boolean hasNormal;
 
     // {@link GenotypingEngine} requires a non-null {@link AFCalculatorProvider} but this class doesn't need it.  Thus we make a dummy
     private static final AFCalculatorProvider DUMMY_AF_CALCULATOR_PROVIDER = new AFCalculatorProvider() {
@@ -143,7 +142,7 @@ public class SomaticGenotypingEngine extends AssemblyBasedCallerGenotypingEngine
             }
 
 
-            final List<Allele> allAllelesToEmit = ListUtils.union(Arrays.asList(mergedVC.getReference()), tumorAltAlleles);
+            final List<Allele> allAllelesToEmit = ListUtils.union(Collections.singletonList(mergedVC.getReference()), tumorAltAlleles);
 
 
             final LikelihoodMatrix<Allele> subsettedLog10TumorMatrix = new SubsettedLikelihoodMatrix<>(log10TumorMatrix, allAllelesToEmit);
@@ -170,7 +169,7 @@ public class SomaticGenotypingEngine extends AssemblyBasedCallerGenotypingEngine
             final List<Allele> trimmedAlleles = trimmedCall.getAlleles();
             final List<Allele> untrimmedAlleles = call.getAlleles();
             final Map<Allele, List<Allele>> trimmedToUntrimmedAlleleMap = IntStream.range(0, trimmedCall.getNAlleles()).boxed()
-                    .collect(Collectors.toMap(n -> trimmedAlleles.get(n), n -> Arrays.asList(untrimmedAlleles.get(n))));
+                    .collect(Collectors.toMap(trimmedAlleles::get, n -> Collections.singletonList(untrimmedAlleles.get(n))));
             final ReadLikelihoods<Allele> trimmedLikelihoods = log10Likelihoods.marginalize(trimmedToUntrimmedAlleleMap);
 
             final VariantContext annotatedCall =  annotationEngine.annotateContext(trimmedCall, featureContext, referenceContext, trimmedLikelihoods, a -> true);
@@ -194,7 +193,7 @@ public class SomaticGenotypingEngine extends AssemblyBasedCallerGenotypingEngine
         return mergedVC.getAlternateAlleles().stream()
                 .map(allele -> ImmutablePair.of(allele, mergedVC.getReference()))
                 .filter(altAndRef -> givenAltAndRefAllelesInOriginalContext.stream().anyMatch(givenAltAndRef -> allelesAreConsistent(givenAltAndRef, altAndRef)))
-                .map(altAndRefPair -> altAndRefPair.getLeft())
+                .map(ImmutablePair::getLeft)
                 .collect(Collectors.toSet());
     }
 
@@ -258,7 +257,7 @@ public class SomaticGenotypingEngine extends AssemblyBasedCallerGenotypingEngine
         callVcb.genotypes(genotypes);
     }
 
-    public static double[] getEffectiveCounts(final LikelihoodMatrix<Allele> log10LikelihoodMatrix) {
+    private static double[] getEffectiveCounts(final LikelihoodMatrix<Allele> log10LikelihoodMatrix) {
         if (log10LikelihoodMatrix.numberOfReads() == 0) {
             return new double[log10LikelihoodMatrix.numberOfAlleles()]; // zero counts for each allele
         }
@@ -338,7 +337,7 @@ public class SomaticGenotypingEngine extends AssemblyBasedCallerGenotypingEngine
     }
 
     //convert a likelihood matrix of alleles x reads into a RealMatrix
-    public static RealMatrix getAsRealMatrix(final LikelihoodMatrix<Allele> matrix) {
+    private static RealMatrix getAsRealMatrix(final LikelihoodMatrix<Allele> matrix) {
         final RealMatrix result = new Array2DRowRealMatrix(matrix.numberOfAlleles(), matrix.numberOfReads());
         result.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override

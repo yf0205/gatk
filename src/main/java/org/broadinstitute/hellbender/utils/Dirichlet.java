@@ -2,6 +2,7 @@ package org.broadinstitute.hellbender.utils;
 
 import org.apache.commons.math3.special.Gamma;
 import org.apache.commons.math3.util.MathArrays;
+import org.broadinstitute.hellbender.utils.param.ParamUtils;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -21,14 +22,23 @@ import java.util.stream.IntStream;
  * @author David Benjamin &lt;davidben@broadinstitute.org&gt;
  */
 public class Dirichlet {
-    final double[] alpha;
+    final protected double[] alpha;
 
-    public Dirichlet(final double... alpha) {
+    protected Dirichlet(final double... alpha) {
         Utils.nonNull(alpha);
         Utils.validateArg(alpha.length >= 1, "Dirichlet parameters must have at least one element");
         Utils.validateArg(MathUtils.allMatch(alpha, x -> x >= 0), "Dirichlet parameters may not be negative");
         Utils.validateArg(MathUtils.allMatch(alpha, Double::isFinite), "Dirichlet parameters must be finite");
         this.alpha = alpha.clone();
+    }
+
+    public static Dirichlet of(final double... alpha) {
+        return new Dirichlet(alpha);
+    }
+
+    public static Dirichlet flat(final int dimension) {
+        ParamUtils.isPositive(dimension, "Dimension must be positive");
+        return of(new IndexRange(0, dimension).mapToDouble(n -> 1));
     }
 
     /**
@@ -38,7 +48,7 @@ public class Dirichlet {
     public static Dirichlet symmetricDirichlet(final int numStates, final double concentration) {
         Utils.validateArg(numStates > 0, "Must have at leat one state");
         Utils.validateArg(concentration > 0, "concentration must be positive");
-        return new Dirichlet(Collections.nCopies(numStates, concentration/numStates).stream().mapToDouble(x->x).toArray());
+        return of(Collections.nCopies(numStates, concentration/numStates).stream().mapToDouble(x->x).toArray());
     }
 
     // in variational Bayes one often needs the effective point estimate of a multinomial distribution with a
@@ -56,6 +66,12 @@ public class Dirichlet {
         return MathUtils.applyToArray(alpha, a -> (Gamma.digamma(a) - digammaOfSum) * MathUtils.LOG10_OF_E);
     }
 
+    // the array of E[ln x_i] for components i
+    public double[] meanLogs() {
+        final double digammaOfSum = Gamma.digamma(MathUtils.sum(alpha));
+        return MathUtils.applyToArray(alpha, a -> Gamma.digamma(a) - digammaOfSum);
+    }
+
     public double[] meanWeights() {
         final double sum = MathUtils.sum(alpha);
         return MathUtils.applyToArray(alpha, x -> x / sum);
@@ -66,5 +82,25 @@ public class Dirichlet {
         return MathUtils.applyToArray(alpha, x -> Math.log10(x / sum));
     }
 
-    public int size() { return alpha.length; }
+    public double logNormalization() {
+        final double logNumerator = Gamma.logGamma(MathUtils.sum(alpha));
+        final double logDenominator = MathUtils.sum(MathUtils.applyToArray(alpha, Gamma::logGamma));
+        return logNumerator - logDenominator;
+    }
+
+    public double log10Normalization() {
+        return MathUtils.logToLog10(logNormalization());
+    }
+
+    public int dimension() { return alpha.length; }
+
+    public double distance1(final Dirichlet other) {
+        Utils.validateArg(this.dimension() == other.dimension(), "Dirichlets must have same dimension.");
+        return MathArrays.distance1(this.alpha, other.alpha);
+    }
+
+    public Dirichlet addCounts(final double[] counts) {
+        Utils.validateArg(counts.length == dimension(), "Counts must have same dimension as prior.");
+        return of(MathArrays.ebeAdd(alpha, counts));
+    }
 }

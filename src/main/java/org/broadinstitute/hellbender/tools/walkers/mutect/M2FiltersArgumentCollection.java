@@ -9,6 +9,7 @@ public class M2FiltersArgumentCollection extends AssemblyBasedCallerArgumentColl
     private static final long serialVersionUID = 9345L;
     public static final String LOG_SOMATIC_PRIOR_LONG_NAME = "log-somatic-prior";
     public static final String TUMOR_LOD_LONG_NAME = "tumor-lod";
+    public static final String CONFIDENT_LOD_LONG_NAME = "confident-lod";
     public static final String NORMAL_ARTIFACT_LOD_LONG_NAME = "normal-artifact-lod";
     public static final String NORMAL_P_VALUE_THRESHOLD_LONG_NAME = "normal-p-value-threshold";
     public static final String MAX_GERMLINE_POSTERIOR_LONG_NAME = "max-germline-posterior";
@@ -53,10 +54,13 @@ public class M2FiltersArgumentCollection extends AssemblyBasedCallerArgumentColl
     public double log10PriorProbOfSomaticEvent = -6.0;
 
     /**
-     * Only variants with tumor LODs exceeding this threshold can pass filtering.
+     * Tumor LOD threshold for first pass
      */
-    @Argument(fullName = TUMOR_LOD_LONG_NAME, optional = true, doc = "LOD threshold for calling tumor variant")
-    public double TUMOR_LOD_THRESHOLD = 5.3;
+    @Argument(fullName = TUMOR_LOD_LONG_NAME, optional = true, doc = "Tumor LOD threshold for first pass")
+    public double firstPassTumorLod = 5.3;
+
+    @Argument(fullName = CONFIDENT_LOD_LONG_NAME, optional = true, doc = "LOD threshold for high-confidence variants")
+    public double highConfidenceLod = 8.0;
 
     /**
      * This is a measure of the minimum evidence to support that a variant observed in the tumor is not also present in the normal
@@ -119,7 +123,7 @@ public class M2FiltersArgumentCollection extends AssemblyBasedCallerArgumentColl
      * does not exceed this value.
      */
     @Argument(fullName = ORIENTATION_BIAS_FDR_LONG_NAME, optional = true, doc = "Mutect will calculate the threshold for the read orientation filter such that the FDR doesn't exceed this value")
-    public double maxFalsePositiveRate = 0.05;
+    public double maxFalsePositiveRate = 0.01;
 
     @Argument(fullName = FILTERING_STATS_LONG_NAME, optional = true, doc = "Write the filtering statistics to this file")
     public File mutect2FilteringStatsTable = new File("Mutect2FilteringStats.tsv");

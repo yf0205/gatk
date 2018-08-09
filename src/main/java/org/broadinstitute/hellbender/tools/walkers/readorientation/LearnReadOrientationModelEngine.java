@@ -11,6 +11,7 @@ import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.linear.RealVector;
 import org.apache.commons.math3.util.MathArrays;
 import org.apache.logging.log4j.Logger;
+import org.broadinstitute.hellbender.utils.BetaDistributionShape;
 import org.broadinstitute.hellbender.utils.MathUtils;
 import org.broadinstitute.hellbender.utils.Nucleotide;
 import org.broadinstitute.hellbender.utils.Utils;

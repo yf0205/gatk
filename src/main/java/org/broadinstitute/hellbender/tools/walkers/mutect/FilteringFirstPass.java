@@ -22,18 +22,21 @@ import java.util.*;
  * not "aware" of other variants, and learns various global properties necessary for a more refined second step.
  */
 public class FilteringFirstPass {
-    final List<FilterResult> filterResults;
-    final Map<String, ImmutablePair<String, Integer>> filteredPhasedCalls;
-    final Map<String, FilterStats> filterStats;
+    final List<FilterResult> filterResults = new ArrayList<>();
+    final List<ImmutablePair<double[], double[]>> unfilteredTumorLodsAndCounts = new ArrayList<>();
+    final Map<String, ImmutablePair<String, Integer>> filteredPhasedCalls = new HashMap<>();
+    final Map<String, FilterStats> filterStats = new HashMap<>();
+    AlleleFractionClustering afClustering = null;
     final String tumorSample;
-    boolean readyForSecondPass;
+    final long callableSites;    //TODO: emit this in M2 and grab from vcf just like tumor sample
+    boolean readyForSecondPass = false;
 
-    public FilteringFirstPass(final String tumorSample) {
-        filterResults = new ArrayList<>();
-        filteredPhasedCalls = new HashMap<>();
-        filterStats = new HashMap<>();
-        readyForSecondPass = false;
+    public static final double FILTER_NOTHING_THRESHOLD = 1.0;
+    public static final double FILTER_EVERYTHING_THRESHOLD = 0.0;
+
+    public FilteringFirstPass(final String tumorSample, final long callableSites) {
         this.tumorSample = tumorSample;
+        this.callableSites = callableSites;
     }
 
     public boolean isReadyForSecondPass() { return readyForSecondPass; }
@@ -68,38 +71,46 @@ public class FilteringFirstPass {
         filterResults.add(filterResult);
         final Genotype tumorGenotype = vc.getGenotype(tumorSample);
 
-        if (!filterResult.getFilters().isEmpty() && hasPhaseInfo(tumorGenotype)) {
+        final Set<String> appliedFilters = filterResult.getFilters();
+        if (!appliedFilters.isEmpty() && hasPhaseInfo(tumorGenotype)) {
             final String pgt = (String) tumorGenotype.getExtendedAttribute(GATKVCFConstants.HAPLOTYPE_CALLER_PHASING_GT_KEY, "");
             final String pid = (String) tumorGenotype.getExtendedAttribute(GATKVCFConstants.HAPLOTYPE_CALLER_PHASING_ID_KEY, "");
             final int position = vc.getStart();
             filteredPhasedCalls.put(pid, new ImmutablePair<>(pgt, position));
         }
+
+        // if a variant has no artifact filter applied (it could have a TLOD filter) we use it for the AF clustering model
+        if (appliedFilters.isEmpty() || (appliedFilters.size() == 1 && appliedFilters.contains(GATKVCFConstants.TUMOR_LOD_FILTER_NAME))) {
+            final double[] tumorLods = Mutect2FilteringEngine.getDoubleArrayAttribute(vc, GATKVCFConstants.TUMOR_LOD_KEY);
+            final double[] tumorADs = Arrays.stream(tumorGenotype.getAD()).mapToDouble(n->n).toArray();
+            unfilteredTumorLodsAndCounts.add(new ImmutablePair<>(tumorLods, tumorADs));
+        }
     }
 
-    public void learnModelForSecondPass(final double requestedFPR){
+    public void learnModelForSecondPass(final M2FiltersArgumentCollection MTFAC) {
         final double[] readOrientationPosteriors = getFilterResults().stream()
                 .filter(r -> r.getFilters().isEmpty())
                 .mapToDouble(r -> r.getReadOrientationPosterior())
                 .toArray();
 
-        final FilterStats readOrientationFilterStats = calculateThresholdForReadOrientationFilter(readOrientationPosteriors, requestedFPR);
+        final FilterStats readOrientationFilterStats = calculateFilterThreshold(readOrientationPosteriors, MTFAC.maxFalsePositiveRate, GATKVCFConstants.READ_ORIENTATION_ARTIFACT_FILTER_NAME);
         filterStats.put(GATKVCFConstants.READ_ORIENTATION_ARTIFACT_FILTER_NAME, readOrientationFilterStats);
+
+        afClustering = new AlleleFractionClustering(unfilteredTumorLodsAndCounts, callableSites, MTFAC);
         readyForSecondPass = true;
     }
 
     /**
+     * Compute a filter's posterior probability threshold that ensures that the false discovery rate (FDR) does not exceed
+     * a requested amount.
      *
-     * Compute the filtering threshold that ensures that the false positive rate among the resulting pass variants
-     * will not exceed the requested false positive rate
-     *
-     * @param posteriors A list of posterior probabilities, which gets sorted
-     * @param requestedFPR We set the filtering threshold such that the FPR doesn't exceed this value
+     * @param posteriors A list of posterior probabilities that candidate variants are not real somatic variants
+     * @param requestedFDR We set the filtering threshold such that the FPR doesn't exceed this value
+     * @param filterName
      * @return
      */
-    public static FilterStats calculateThresholdForReadOrientationFilter(final double[] posteriors, final double requestedFPR){
-        ParamUtils.isPositiveOrZero(requestedFPR, "requested FPR must be non-negative");
-        final double thresholdForFilteringNone = 1.0;
-        final double thresholdForFilteringAll = 0.0;
+    public static FilterStats calculateFilterThreshold(final double[] posteriors, final double requestedFDR, String filterName) {
+        ParamUtils.isPositiveOrZero(requestedFDR, "requested FPR must be non-negative");
 
         Arrays.sort(posteriors);
 
@@ -111,20 +122,30 @@ public class FilteringFirstPass {
 
             // One can show that the cumulative error rate is monotonically increasing in i
             final double expectedFPR = (cumulativeExpectedFPs + posterior) / (i + 1);
-            if (expectedFPR > requestedFPR){
+            if (expectedFPR > requestedFDR){
                 return i > 0 ?
-                        new FilterStats(GATKVCFConstants.READ_ORIENTATION_ARTIFACT_FILTER_NAME, posteriors[i-1],
-                                cumulativeExpectedFPs, i-1, cumulativeExpectedFPs/i, requestedFPR) :
-                        new FilterStats(GATKVCFConstants.READ_ORIENTATION_ARTIFACT_FILTER_NAME, thresholdForFilteringAll,
-                                0.0, 0, 0.0, requestedFPR);
+                        new FilterStats(filterName, posteriors[i-1],
+                                cumulativeExpectedFPs, i-1, cumulativeExpectedFPs/i, requestedFDR) :
+                        new FilterStats(filterName, FILTER_EVERYTHING_THRESHOLD,
+                                0.0, 0, 0.0, requestedFDR);
             }
 
             cumulativeExpectedFPs += posterior;
         }
 
         // If the expected FP rate never exceeded the max tolerable value, then we can let everything pass
-        return new FilterStats(GATKVCFConstants.READ_ORIENTATION_ARTIFACT_FILTER_NAME, thresholdForFilteringNone,
-                cumulativeExpectedFPs, numPassingVariants, cumulativeExpectedFPs/numPassingVariants, requestedFPR);
+        return new FilterStats(filterName, FILTER_NOTHING_THRESHOLD,
+                cumulativeExpectedFPs, numPassingVariants, cumulativeExpectedFPs/numPassingVariants, requestedFDR);
+    }
+
+    public double getSomaticProbability(final double tumorLog10Odds, final double refCount, final double altCount) {
+        Utils.validateArg(readyForSecondPass, "somatic probability should only be called after learning from first pass.");
+        return afClustering.getSomaticProbability(tumorLog10Odds, refCount, altCount);
+    }
+
+    public boolean passesLodThreshold(final double tumorLog10Odds, final double refCount, final double altCount) {
+        Utils.validateArg(readyForSecondPass, "somatic probability should only be called after learning from first pass.");
+        return afClustering.passesThreshold(tumorLog10Odds, refCount, altCount);
     }
 
     public static boolean hasPhaseInfo(final Genotype genotype) {

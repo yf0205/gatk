@@ -10,15 +10,15 @@ import org.broadinstitute.barclay.argparser.ArgumentCollection;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.barclay.help.DocumentedFeature;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
-import org.broadinstitute.hellbender.engine.*;
-import picard.cmdline.programgroups.VariantFilteringProgramGroup;
 import org.broadinstitute.hellbender.engine.FeatureContext;
 import org.broadinstitute.hellbender.engine.ReadsContext;
 import org.broadinstitute.hellbender.engine.ReferenceContext;
+import org.broadinstitute.hellbender.engine.TwoPassVariantWalker;
 import org.broadinstitute.hellbender.tools.exome.FilterByOrientationBias;
 import org.broadinstitute.hellbender.tools.walkers.contamination.CalculateContamination;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFHeaderLines;
+import picard.cmdline.programgroups.VariantFilteringProgramGroup;
 
 import java.io.File;
 import java.util.Optional;
@@ -101,11 +101,15 @@ public final class FilterMutectCalls extends TwoPassVariantWalker {
         vcfWriter.writeHeader(vcfHeader);
 
         final String tumorSample = getTumorSampleName();
+
+        // TODO: put this in!!!!
+        final long callableSites = 3_000_000_000L;
+                //getCallableSites();
         final VCFHeaderLine normalSampleHeaderLine = getHeaderForVariants().getMetaDataLine(Mutect2Engine.NORMAL_SAMPLE_KEY_IN_VCF_HEADER);
         final Optional<String> normalSample = normalSampleHeaderLine == null ? Optional.empty() : Optional.of(normalSampleHeaderLine.getValue());
 
         filteringEngine = new Mutect2FilteringEngine(MTFAC, tumorSample, normalSample);
-        filteringFirstPass = new FilteringFirstPass(tumorSample);
+        filteringFirstPass = new FilteringFirstPass(tumorSample, callableSites);
     }
 
     @Override
@@ -121,7 +125,7 @@ public final class FilterMutectCalls extends TwoPassVariantWalker {
 
     @Override
     protected void afterFirstPass() {
-        filteringFirstPass.learnModelForSecondPass(MTFAC.maxFalsePositiveRate);
+        filteringFirstPass.learnModelForSecondPass(MTFAC);
         filteringFirstPass.writeM2FilterSummary(MTFAC.mutect2FilteringStatsTable);
     }
 

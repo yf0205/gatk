@@ -481,6 +481,10 @@ public final class MathUtils {
         return Math.round(value / phredScorePrecision) * phredScorePrecision;
     }
 
+    public static double xLog10x(final double x) {
+        return x < 1e-8 ? 0 : x * Math.log10(x);
+    }
+
     @FunctionalInterface
     public interface IntToDoubleArrayFunction {
         double[] apply(int value);

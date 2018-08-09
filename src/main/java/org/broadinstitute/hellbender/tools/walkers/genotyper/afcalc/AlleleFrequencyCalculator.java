@@ -63,6 +63,7 @@ public final class AlleleFrequencyCalculator extends AFCalculator {
 
         final double[] priorPseudocounts = alleles.stream()
                 .mapToDouble(a -> a.isReference() ? refPseudocount : (a.length() > 1 ? snpPseudocount : indelPseudocount)).toArray();
+        final Dirichlet prior = Dirichlet.of(priorPseudocounts);
 
         double[] alleleCounts = new double[numAlleles];
         final double flatLog10AlleleFrequency = -MathUtils.log10(numAlleles); // log10(1/numAlleles)
@@ -72,12 +73,12 @@ public final class AlleleFrequencyCalculator extends AFCalculator {
             final double[] newAlleleCounts = effectiveAlleleCounts(vc, log10AlleleFrequencies);
             alleleCountsMaximumDifference = Arrays.stream(MathArrays.ebeSubtract(alleleCounts, newAlleleCounts)).map(Math::abs).max().getAsDouble();
             alleleCounts = newAlleleCounts;
-            final double[] posteriorPseudocounts = MathArrays.ebeAdd(priorPseudocounts, alleleCounts);
+            final Dirichlet posterior = prior.addCounts(alleleCounts);
 
             // first iteration uses flat prior in order to avoid local minimum where the prior + no pseudocounts gives such a low
             // effective allele frequency that it overwhelms the genotype likelihood of a real variant
             // basically, we want a chance to get non-zero pseudocounts before using a prior that's biased against a variant
-            log10AlleleFrequencies = new Dirichlet(posteriorPseudocounts).log10MeanWeights();
+            log10AlleleFrequencies = posterior.log10MeanWeights();
         }
 
         double[] log10POfZeroCountsByAllele = new double[numAlleles];
