@@ -157,6 +157,16 @@ class FeatureCache<CACHED_FEATURE extends Feature> {
             ++numCacheHits;
         }
         else {
+            if (cachedInterval != null &&
+                    interval.getContig().equals(cachedInterval.getContig()) &&
+                    interval.getStart() < cachedInterval.getStart()) {
+                throw new GATKException(String.format(
+                        "Feature cache miss while attempting to retrieve a previous interval from the feature cache. New interval: %s Previous: %s",
+                        interval.toString(),
+                        cachedInterval.toString()
+                    )
+                );
+            }
             ++numCacheMisses;
         }
 
