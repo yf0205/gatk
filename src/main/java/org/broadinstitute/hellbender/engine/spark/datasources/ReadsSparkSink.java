@@ -166,7 +166,9 @@ public final class ReadsSparkSink {
     public static void writeReads(
             final JavaSparkContext ctx, final String outputFile, final String referenceFile, final JavaRDD<GATKRead> reads,
             final SAMFileHeader header, ReadsWriteFormat format) throws IOException {
-        writeReads(ctx, outputFile, referenceFile, reads, header, format, 0, null,format==ReadsWriteFormat.SINGLE);
+        // NOTE, we must include 'format==ReadsWriteFormat.SINGLE' to preserve the old default behavior for writing spark output
+        // which would not sort the bam if outputting to ReadsWriteFormat.SINGLE. Please use the overload for different sroting behavior.
+        writeReads(ctx, outputFile, referenceFile, reads, header, format, 0, null, format==ReadsWriteFormat.SINGLE);
     }
 
     /**
@@ -202,20 +204,20 @@ public final class ReadsSparkSink {
         // SAMRecords, this will effectively be a no-op. The SAMRecords will be headerless
         // for efficient serialization.
         final JavaRDD<SAMRecord> samReads = reads.map(read -> read.convertToSAMRecord(null));
-        final JavaRDD<SAMRecord> readsToUse = sortReadsToHeader ? sortSamRecordsToMatchHeader(samReads, header, numReducers) : samReads;
+        final JavaRDD<SAMRecord> readsToOutput = sortReadsToHeader ? sortSamRecordsToMatchHeader(samReads, header, numReducers) : samReads;
 
         if (format == ReadsWriteFormat.SINGLE) {
-            writeReadsSingle(ctx, absoluteOutputFile, absoluteReferenceFile, samOutputFormat, readsToUse, header, numReducers, outputPartsDir);
+            writeReadsSingle(ctx, absoluteOutputFile, absoluteReferenceFile, samOutputFormat, readsToOutput, header, numReducers, outputPartsDir);
         } else if (format == ReadsWriteFormat.SHARDED) {
             if (outputPartsDir!=null) {
                 throw new  GATKException(String.format("You specified the bam output parts directory %s, but requested a sharded output format which does not use this option",outputPartsDir));
             }
-            saveAsShardedHadoopFiles(ctx, absoluteOutputFile, absoluteReferenceFile, samOutputFormat, readsToUse, header, true);
+            saveAsShardedHadoopFiles(ctx, absoluteOutputFile, absoluteReferenceFile, samOutputFormat, readsToOutput, header, true);
         } else if (format == ReadsWriteFormat.ADAM) {
             if (outputPartsDir!=null) {
                 throw new  GATKException(String.format("You specified the bam output parts directory %s, but requested an ADAM output format which does not use this option",outputPartsDir));
             }
-            writeReadsADAM(ctx, absoluteOutputFile, readsToUse, header);
+            writeReadsADAM(ctx, absoluteOutputFile, readsToOutput, header);
         }
     }
 
