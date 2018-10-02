@@ -356,8 +356,8 @@ public final class GenomicsDBImport extends GATKTool {
                                 + variantPath.toUri() + " and " + previousPath + ".");
                     }
                 }
-                catch(URISyntaxException e) {
-                    throw new UserException("Malformed URI "+e.toString());
+                catch(final URISyntaxException e) {
+                    throw new UserException("Malformed URI "+e.toString(), e);
                 }
             }
             mergedHeaderLines = VCFUtils.smartMergeHeaders(headers, true);

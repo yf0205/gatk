@@ -36,7 +36,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 import java.io.FileReader;
-import java.io.FileNotFoundException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -317,7 +316,7 @@ public final class FeatureDataSource<T extends Feature> implements GATKDataSourc
                 throw new UserException("GenomicsDB inputs can only be used to provide VariantContexts.", e);
             }
         } else {
-            FeatureCodec<T, ?> codec = getCodecForFeatureInput(featureInput, targetFeatureType);
+            final FeatureCodec<T, ?> codec = getCodecForFeatureInput(featureInput, targetFeatureType);
             return getTribbleFeatureReader(featureInput, codec, cloudWrapper, cloudIndexWrapper);
         }
     }
@@ -332,7 +331,7 @@ public final class FeatureDataSource<T extends Feature> implements GATKDataSourc
     @SuppressWarnings("unchecked")
     private static <T extends Feature> FeatureCodec<T, ?> getCodecForFeatureInput(final FeatureInput<T> featureInput,
                                                                                   final Class<? extends Feature> targetFeatureType) {
-        FeatureCodec<T, ?> codec;
+        final FeatureCodec<T, ?> codec;
         final Class<FeatureCodec<T, ?>> codecClass = featureInput.getFeatureCodecClass();
         if (codecClass == null) {
             final Path featurePath = IOUtils.getPath(featureInput.getFeaturePath());
@@ -343,14 +342,14 @@ public final class FeatureDataSource<T extends Feature> implements GATKDataSourc
             try {
                 codec = codecClass.newInstance();
             }
-            catch ( InstantiationException | IllegalAccessException e ) {
+            catch (final InstantiationException | IllegalAccessException e ) {
                 throw new GATKException("Unable to automatically instantiate codec " + codecClass.getName());
             }
         }
         return codec;
     }
 
-    private static <T extends Feature> AbstractFeatureReader<T, ?> getTribbleFeatureReader(final FeatureInput<T> featureInput, final FeatureCodec<T, ?> codec, Function<SeekableByteChannel, SeekableByteChannel> cloudWrapper, Function<SeekableByteChannel, SeekableByteChannel> cloudIndexWrapper) {
+    private static <T extends Feature> AbstractFeatureReader<T, ?> getTribbleFeatureReader(final FeatureInput<T> featureInput, final FeatureCodec<T, ?> codec, final Function<SeekableByteChannel, SeekableByteChannel> cloudWrapper, final Function<SeekableByteChannel, SeekableByteChannel> cloudIndexWrapper) {
         Utils.nonNull(codec);
         try {
             final String absolutePath = IOUtils.getPath(featureInput.getFeaturePath()).toAbsolutePath().toUri().toString();
@@ -391,7 +390,7 @@ public final class FeatureDataSource<T extends Feature> implements GATKDataSourc
             IOUtils.canReadFile(callsetJson);
             IOUtils.canReadFile(vidmapJson);
             IOUtils.canReadFile(vcfHeader);
-        } catch ( UserException.CouldNotReadInputFile e ) {
+        } catch (final UserException.CouldNotReadInputFile e ) {
             throw new UserException("Couldn't connect to GenomicsDB because the vidmap, callset JSON files, or gVCF Header (" +
                     GenomicsDBConstants.DEFAULT_VIDMAP_FILE_NAME + "," + GenomicsDBConstants.DEFAULT_CALLSETMAP_FILE_NAME + "," +
                     GenomicsDBConstants.DEFAULT_VCFHEADER_FILE_NAME + ") could not be read from GenomicsDB workspace " + workspace.getAbsolutePath(), e);
@@ -410,7 +409,7 @@ public final class FeatureDataSource<T extends Feature> implements GATKDataSourc
     private static GenomicsDBExportConfiguration.ExportConfiguration createExportConfiguration(final File reference, final File workspace,
                                                                                                final File callsetJson, final File vidmapJson,
                                                                                                final File vcfHeader) {
-        GenomicsDBExportConfiguration.ExportConfiguration.Builder exportConfigurationBuilder =
+        final GenomicsDBExportConfiguration.ExportConfiguration.Builder exportConfigurationBuilder =
                 GenomicsDBExportConfiguration.ExportConfiguration.newBuilder()
                         .setWorkspace(workspace.getAbsolutePath())
                         .setReferenceGenome(reference.getAbsolutePath())
@@ -421,7 +420,7 @@ public final class FeatureDataSource<T extends Feature> implements GATKDataSourc
                         .setProduceGTWithMinPLValueForSpanningDeletions(false)
                         .setSitesOnlyQuery(false)
                         .setMaxDiploidAltAllelesThatCanBeGenotyped(GenotypeLikelihoods.MAX_DIPLOID_ALT_ALLELES_THAT_CAN_BE_GENOTYPED);
-        Path arrayFolder = Paths.get(workspace.getAbsolutePath(), GenomicsDBConstants.DEFAULT_ARRAY_NAME).toAbsolutePath();
+        final Path arrayFolder = Paths.get(workspace.getAbsolutePath(), GenomicsDBConstants.DEFAULT_ARRAY_NAME).toAbsolutePath();
 
         // For the multi-interval support, we create multiple arrays (directories) in a single workspace -
         // one per interval. So, if you wish to import intervals ("chr1", [ 1, 100M ]) and ("chr2", [ 1, 100M ]),
@@ -453,7 +452,7 @@ public final class FeatureDataSource<T extends Feature> implements GATKDataSourc
 
         //Parse the vid json and create an in-memory Protobuf structure representing the
         //information in the JSON file
-        GenomicsDBVidMapProto.VidMappingPB vidMapPB = null;
+        GenomicsDBVidMapProto.VidMappingPB vidMapPB;
         try {
           vidMapPB = getProtobufVidMappingFromJsonFile(vidmapJson);
         }
@@ -464,7 +463,7 @@ public final class FeatureDataSource<T extends Feature> implements GATKDataSourc
         //In vidMapPB, fields is a list of GenomicsDBVidMapProto.GenomicsDBFieldInfo objects
         //Each GenomicsDBFieldInfo object contains information about a specific field in the TileDB/GenomicsDB store
         //We iterate over the list and create a field name to list index map
-        HashMap<String, Integer> fieldNameToIndexInVidFieldsList =
+        final HashMap<String, Integer> fieldNameToIndexInVidFieldsList =
             getFieldNameToListIndexInProtobufVidMappingObject(vidMapPB);
 
         //Example: set MQ combine operation to median (default is also median, but this is just an example)
@@ -493,8 +492,10 @@ public final class FeatureDataSource<T extends Feature> implements GATKDataSourc
      */
     public static GenomicsDBVidMapProto.VidMappingPB getProtobufVidMappingFromJsonFile(final File vidmapJson)
         throws IOException {
-        GenomicsDBVidMapProto.VidMappingPB.Builder vidMapBuilder = GenomicsDBVidMapProto.VidMappingPB.newBuilder();
-        JsonFormat.merge(new FileReader(vidmapJson), vidMapBuilder);
+        final GenomicsDBVidMapProto.VidMappingPB.Builder vidMapBuilder = GenomicsDBVidMapProto.VidMappingPB.newBuilder();
+        try(final FileReader reader = new FileReader(vidmapJson)) {
+            JsonFormat.merge(reader, vidMapBuilder);
+        }
         return vidMapBuilder.build();
     }
 
@@ -507,9 +508,10 @@ public final class FeatureDataSource<T extends Feature> implements GATKDataSourc
      */
     public static HashMap<String, Integer> getFieldNameToListIndexInProtobufVidMappingObject(
             final GenomicsDBVidMapProto.VidMappingPB vidMapPB) {
-        HashMap<String, Integer> fieldNameToIndexInVidFieldsList = new HashMap<String, Integer>();
-        for(int fieldIdx=0;fieldIdx<vidMapPB.getFieldsCount();++fieldIdx)
+        final HashMap<String, Integer> fieldNameToIndexInVidFieldsList = new HashMap<String, Integer>();
+        for(int fieldIdx=0;fieldIdx<vidMapPB.getFieldsCount();++fieldIdx) {
             fieldNameToIndexInVidFieldsList.put(vidMapPB.getFields(fieldIdx).getName(), fieldIdx);
+        }
         return fieldNameToIndexInVidFieldsList;
     }
 
@@ -527,7 +529,7 @@ public final class FeatureDataSource<T extends Feature> implements GATKDataSourc
             final String fieldName,
             final String newCombineOperation)
     {
-        int fieldIdx = fieldNameToIndexInVidFieldsList.containsKey(fieldName)
+        final int fieldIdx = fieldNameToIndexInVidFieldsList.containsKey(fieldName)
             ? fieldNameToIndexInVidFieldsList.get(fieldName) : -1;
         if(fieldIdx >= 0) {
             //Would need to rebuild vidMapPB - so get top level builder first
@@ -564,16 +566,16 @@ public final class FeatureDataSource<T extends Feature> implements GATKDataSourc
             final String fieldName,
             final String newCombineOperation)
     {
-        int fieldIdx = fieldNameToIndexInVidFieldsList.containsKey(fieldName)
+        final int fieldIdx = fieldNameToIndexInVidFieldsList.containsKey(fieldName)
                 ? fieldNameToIndexInVidFieldsList.get(fieldName) : -1;
         if(fieldIdx >= 0) {
             //Would need to rebuild vidMapPB - so get top level builder first
-            GenomicsDBVidMapProto.VidMappingPB.Builder updatedVidMapBuilder = vidMapPB.toBuilder();
+            final GenomicsDBVidMapProto.VidMappingPB.Builder updatedVidMapBuilder = vidMapPB.toBuilder();
             //To update the list element corresponding to fieldName, we get the builder for that specific list element
-            GenomicsDBVidMapProto.GenomicsDBFieldInfo.Builder infoBuilder =
+            final GenomicsDBVidMapProto.GenomicsDBFieldInfo.Builder infoBuilder =
                     updatedVidMapBuilder.getFieldsBuilder(fieldIdx);
 
-            GenomicsDBVidMapProto.FieldLengthDescriptorComponentPB.Builder lengthDescriptorComponentBuilder =
+            final GenomicsDBVidMapProto.FieldLengthDescriptorComponentPB.Builder lengthDescriptorComponentBuilder =
                     GenomicsDBVidMapProto.FieldLengthDescriptorComponentPB.newBuilder();
             lengthDescriptorComponentBuilder.setVariableLengthDescriptor("R");
             infoBuilder.addLength(lengthDescriptorComponentBuilder.build());
@@ -667,7 +669,7 @@ public final class FeatureDataSource<T extends Feature> implements GATKDataSourc
                                                             : featureReader.iterator();
             return currentIterator;
         }
-        catch ( IOException e ) {
+        catch (final IOException e ) {
             throw new GATKException("Error creating iterator over file " + featureInput.getFeaturePath(), e);
         }
     }
@@ -756,10 +758,10 @@ public final class FeatureDataSource<T extends Feature> implements GATKDataSourc
         final SimpleInterval queryInterval = new SimpleInterval(interval.getContig(), interval.getStart(), Math.addExact(interval.getEnd(), queryLookaheadBases));
 
         // Query iterator over our reader will be immediately closed after re-populating our cache
-        try ( CloseableTribbleIterator<T> queryIter = featureReader.query(queryInterval.getContig(), queryInterval.getStart(), queryInterval.getEnd()) ) {
+        try (final CloseableTribbleIterator<T> queryIter = featureReader.query(queryInterval.getContig(), queryInterval.getStart(), queryInterval.getEnd()) ) {
             queryCache.fill(queryIter, queryInterval);
         }
-        catch ( IOException e ) {
+        catch (final IOException e ) {
             throw new GATKException("Error querying file " + featureInput + " over interval " + interval, e);
         }
     }
@@ -798,7 +800,7 @@ public final class FeatureDataSource<T extends Feature> implements GATKDataSourc
                 featureReader.close();
             }
         }
-        catch ( IOException e ) {
+        catch (final IOException e ) {
             throw new GATKException("Error closing Feature reader for input " + featureInput);
         }
     }

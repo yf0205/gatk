@@ -137,8 +137,9 @@ public final class FixCallSetSampleOrdering extends VariantWalker {
         Map<Path, String> mapping = new HashMap<>();
         final Set<URI> gvcfURIsFromSampleNameMap = new HashSet<>(sampleNameMapFromGenomicsDBImport.values());
         final Set<Path> gvcfPathsFromSampleNameMap = new HashSet<>();
-        for(final URI currEntry : gvcfURIsFromSampleNameMap)
+        for(final URI currEntry : gvcfURIsFromSampleNameMap) {
             gvcfPathsFromSampleNameMap.add(IOUtils.getPath(currEntry.toString()));
+        }
 
         try {
             final List<String> lines = Files.readAllLines(IOUtils.getPath(gvcfToHeaderSampleMapFile));
