@@ -23,7 +23,7 @@ import java.util.*;
  */
 public class FilteringFirstPass {
     final List<FilterResult> filterResults = new ArrayList<>();
-    final List<ImmutablePair<double[], double[]>> unfilteredTumorLodsAndCounts = new ArrayList<>();
+    final List<ImmutablePair<double[], int[]>> unfilteredTumorLodsAndCounts = new ArrayList<>();
     final Map<String, ImmutablePair<String, Integer>> filteredPhasedCalls = new HashMap<>();
     final Map<String, FilterStats> filterStats = new HashMap<>();
     AlleleFractionClustering afClustering = null;
@@ -82,7 +82,7 @@ public class FilteringFirstPass {
         // if a variant has no artifact filter applied (it could have a TLOD filter) we use it for the AF clustering model
         if (appliedFilters.isEmpty() || (appliedFilters.size() == 1 && appliedFilters.contains(GATKVCFConstants.TUMOR_LOD_FILTER_NAME))) {
             final double[] tumorLods = Mutect2FilteringEngine.getDoubleArrayAttribute(vc, GATKVCFConstants.TUMOR_LOD_KEY);
-            final double[] tumorADs = Arrays.stream(tumorGenotype.getAD()).mapToDouble(n->n).toArray();
+            final int[] tumorADs = Arrays.stream(tumorGenotype.getAD()).toArray();
             unfilteredTumorLodsAndCounts.add(new ImmutablePair<>(tumorLods, tumorADs));
         }
     }
@@ -136,11 +136,6 @@ public class FilteringFirstPass {
         // If the expected FP rate never exceeded the max tolerable value, then we can let everything pass
         return new FilterStats(filterName, FILTER_NOTHING_THRESHOLD,
                 cumulativeExpectedFPs, numPassingVariants, cumulativeExpectedFPs/numPassingVariants, requestedFDR);
-    }
-
-    public double getSomaticProbability(final double tumorLog10Odds, final double refCount, final double altCount) {
-        Utils.validateArg(readyForSecondPass, "somatic probability should only be called after learning from first pass.");
-        return afClustering.getSomaticProbability(tumorLog10Odds, refCount, altCount);
     }
 
     public boolean passesLodThreshold(final double tumorLog10Odds, final double refCount, final double altCount) {

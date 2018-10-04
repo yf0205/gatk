@@ -5,7 +5,6 @@ import org.apache.commons.math.MathException;
 import org.apache.commons.math.analysis.UnivariateRealFunction;
 import org.apache.commons.math.analysis.solvers.BisectionSolver;
 import org.broadinstitute.hellbender.exceptions.GATKException;
-import org.broadinstitute.hellbender.tools.walkers.validation.basicshortmutpileup.BetaBinomialDistribution;
 import org.broadinstitute.hellbender.utils.BetaDistributionShape;
 import org.broadinstitute.hellbender.utils.DirichletClusterer;
 import org.broadinstitute.hellbender.utils.IndexRange;
@@ -15,7 +14,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-public class AlleleFractionClusterer extends DirichletClusterer<AlleleFractionClusterer.Cluster, AlleleFractionClusterer.Count> {
+public class AlleleFractionClusterer extends DirichletClusterer<AFCluster, Count> {
     private static final double MIN_SHAPE_SIZE_FOR_BINOMIAL = 1000;
 
     private static final int NUM_CLUSTERS = 20;
@@ -24,11 +23,11 @@ public class AlleleFractionClusterer extends DirichletClusterer<AlleleFractionCl
         super(data, concentration);
     }
 
-    public double logLikelihood(final Cluster cluster, final Count count) {
+    public double logLikelihood(final AFCluster cluster, final Count count) {
         return cluster.logLikelihood(count);
     }
 
-    public List<Cluster> initializeClusters(final List<Count> data) {
+    public List<AFCluster> initializeClusters(final List<Count> data) {
         //sort by AF
         final List<Double> sortedAFs = data.stream().map(Count::getAF).sorted().collect(Collectors.toList());
 
@@ -39,14 +38,14 @@ public class AlleleFractionClusterer extends DirichletClusterer<AlleleFractionCl
                 .collect(Collectors.toList());
 
         // add an initially flat background Beta cluster last
-        final List<Cluster> clusters = chunkAverageAFs.stream().map(af -> makeBinomialCluster(af)).collect(Collectors.toList());
-        clusters.add(new Cluster(true, new BetaDistributionShape(1,1)));
+        final List<AFCluster> clusters = chunkAverageAFs.stream().map(af -> makeBinomialCluster(af)).collect(Collectors.toList());
+        clusters.add(new AFCluster(true, new BetaDistributionShape(1,1)));
         return clusters;
     }
 
-    public Cluster relearnCluster(final Cluster current, final List<Count> data, final double[] responsibilities) {
+    public AFCluster relearnCluster(final AFCluster current, final List<Count> data, final double[] responsibilities) {
         if (current.isBackground()) {
-            return new Cluster(true, fitShape(data, responsibilities));
+            return new AFCluster(true, fitShape(data, responsibilities));
         } else {    // weighted average of counts
             final double weightedAltCount = new IndexRange(0, data.size()).sum(n -> responsibilities[n] * data.get(n).getAltCount());
             final double weightedRefCount = new IndexRange(0, data.size()).sum(n -> responsibilities[n] * data.get(n).getRefCount());
@@ -55,10 +54,10 @@ public class AlleleFractionClusterer extends DirichletClusterer<AlleleFractionCl
         }
     }
 
-    private Cluster makeBinomialCluster(final double alleleFraction) {
+    private AFCluster makeBinomialCluster(final double alleleFraction) {
         final double alpha = MIN_SHAPE_SIZE_FOR_BINOMIAL;
         final double beta = alpha * (1 - alleleFraction) / alleleFraction;
-        return new Cluster(false, new BetaDistributionShape(alpha, beta));
+        return new AFCluster(false, new BetaDistributionShape(alpha, beta));
     }
 
     private BetaDistributionShape fitShape(List<Count> counts, final double[] responsibilities) {
@@ -88,38 +87,4 @@ public class AlleleFractionClusterer extends DirichletClusterer<AlleleFractionCl
         return (1 - mean) * alpha / mean;
     }
 
-    public static class Count {
-        private final int altCount;
-        private final int refCount;
-
-        public Count(final int altCount, final int refCount) {
-            this.altCount = altCount;
-            this.refCount = refCount;
-        }
-
-        public int getAltCount() { return altCount; }
-
-        public int getRefCount() { return refCount; }
-
-        public double getAF() { return (double) altCount / refCount; }
-
-        public int getTotal() { return altCount + refCount; }
-    }
-
-    public static class Cluster {
-        final private boolean isBackground;
-
-        final private BetaDistributionShape shape;
-
-        public Cluster(final boolean isBackground, final BetaDistributionShape shape) {
-            this.isBackground = isBackground;
-            this.shape = shape;
-        }
-
-        public boolean isBackground() { return isBackground; }
-
-        public double logLikelihood(final Count count) {
-            return new BetaBinomialDistribution(null, shape.getAlpha(), shape.getBeta(), count.getTotal()).logProbability(count.altCount);
-        }
-    }
 }

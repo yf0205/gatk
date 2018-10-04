@@ -5,6 +5,7 @@ import org.apache.commons.math.linear.RealMatrix;
 import org.apache.commons.math3.util.MathArrays;
 
 import java.util.List;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -31,6 +32,20 @@ public abstract class DirichletClusterer<CLUSTER, DATUM> {
             iterate();
         }
 
+    }
+
+    public Function<DATUM, Double> mixtureModelLogLikelihood() {
+        final double[] log10EffectiveWeights = MathUtils.normalizeLog10(weightsPosterior().effectiveLog10MultinomialWeights());
+        final double[] logEffectiveWeights = MathUtils.applyToArrayInPlace(log10EffectiveWeights, x -> x * MathUtils.LOG10_OF_E);
+
+        return new Function<DATUM, Double>() {
+            final private double[] logWeights = logEffectiveWeights;
+            
+            public Double apply(final DATUM datum) {
+                final double[] logLikelihoods = clusters.stream().mapToDouble(cluster -> logLikelihood(cluster, datum)).toArray();
+                return MathUtils.logSumExp(MathArrays.ebeAdd(logWeights, logLikelihoods));
+            }
+        };
     }
 
     private void iterate() {
