@@ -13,7 +13,7 @@ public class Count {
 
     public int getRefCount() { return refCount; }
 
-    public double getAF() { return (double) altCount / refCount; }
+    public double getAF() { return (double) altCount / (altCount + refCount); }
 
     public int getTotal() { return altCount + refCount; }
 }

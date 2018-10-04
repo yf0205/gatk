@@ -10,7 +10,6 @@ import java.util.stream.Collectors;
 
 public class AlleleFractionClustering {
     private AlleleFractionClusterer somaticClustering;
-    private final long callableSites;
     private double log10SomaticPrior;
     private double log10NothingPrior;
     private double posteriorThreshold;
@@ -19,7 +18,6 @@ public class AlleleFractionClustering {
 
     public AlleleFractionClustering(final List<ImmutablePair<double[], int[]>> tumorLodsAndCounts,
                                     final long callableSites, final M2FiltersArgumentCollection MTFAC) {
-        this.callableSites = callableSites;
 
         final List<ImmutablePair<Double, Count>> lodsAndCounts = tumorLodsAndCounts.stream().map(pair -> {
             final double bestTLod = MathUtils.arrayMax(pair.getLeft());
