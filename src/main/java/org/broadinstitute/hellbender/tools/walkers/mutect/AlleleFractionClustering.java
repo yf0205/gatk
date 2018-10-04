@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class AlleleFractionClustering {
-    private AlleleFractionClusterer somaticDistribution;
+    private AlleleFractionClusterer somaticClustering;
     private final long callableSites;
     private double log10SomaticPrior;
     private double log10NothingPrior;
@@ -33,45 +33,31 @@ public class AlleleFractionClustering {
                 .map(pair -> pair.getRight())
                 .collect(Collectors.toList());
 
-        somaticDistribution = new AlleleFractionClusterer(confidentCounts, CONCENTRATION);
+        somaticClustering = new AlleleFractionClusterer(confidentCounts, CONCENTRATION);
 
         final double somaticCount = confidentCounts.size();
         log10SomaticPrior = FastMath.log10(somaticCount / callableSites);
         log10NothingPrior = FastMath.log10((callableSites - somaticCount)/ callableSites);
 
-        //TODO: real measure of convergence or at least extract magic constant!
-        //for (int n = 0; n < 3; n++) {
-            // E step with fractional assignments to nothing, low-confidence, high confidence
-            responsibilities = tumorLodsAndCounts.stream().map(pair -> {
-                final double tumorLog10Odds = pair.getLeft()[0];
-                final double refCount = pair.getRight()[0];
-                final double altCount = pair.getRight()[1];
-                return getResponsibilities(tumorLog10Odds, refCount, altCount);
-            }).collect(Collectors.toList());
+        // TODO: put this in convergence loop where we update the priors?
+        final double[] posteriorProbabilitiesOfNothing = lodsAndCounts.stream()
+                .mapToDouble(pair -> 1 - somaticProbability(pair.getLeft(), pair.getRight())).toArray();
 
-        //    updatePriors(responsibilities);
-        //    fitShape(allCounts, responsibilities);
-        //}
-
-        final double[] posteriorProbabilitiesOfNothing = responsibilities.stream().mapToDouble(r -> r[0]).toArray();
         final FilteringFirstPass.FilterStats filterStats = FilteringFirstPass.calculateFilterThreshold(posteriorProbabilitiesOfNothing, MTFAC.maxFalsePositiveRate, GATKVCFConstants.TUMOR_LOD_FILTER_NAME);
         posteriorThreshold = filterStats.getThreshold();
     }
 
     // array of responsibilities / posteriors, starting with nothing and proceeding through all somatic clusters
     // (currently there is only one somatic cluster)
-    private double[] getResponsibilities(final double tumorLog10Odds, final double refCount, final double altCount) {
-        final double log10OddsCorrection = SomaticLikelihoodsEngine.log10OddsCorrection(
-                somaticDistribution, Dirichlet.flat(2), new double[]{altCount, refCount});
-
+    private double somaticProbability(final double tumorLog10Odds, final Count count) {
         final double[] unweightedLog10Responsibilities = new double[]{log10NothingPrior,
-                log10SomaticPrior + tumorLog10Odds + log10OddsCorrection};
+                log10SomaticPrior + tumorLog10Odds + somaticClustering.log10OddsCorrection(count.getAltCount(), count.getRefCount())};
 
-        return MathUtils.normalizeFromLog10ToLinearSpace(unweightedLog10Responsibilities);
+        return MathUtils.normalizeFromLog10ToLinearSpace(unweightedLog10Responsibilities)[1];
     }
 
-    public boolean passesThreshold(final double tumorLog10Odds, final double refCount, final double altCount) {
-        final double nonSomaticProbability =  getResponsibilities(tumorLog10Odds, refCount, altCount)[0];
+    public boolean passesThreshold(final double tumorLog10Odds, final int refCount, final int altCount) {
+        final double nonSomaticProbability = 1 - somaticProbability(tumorLog10Odds, new Count(altCount, refCount));
         return nonSomaticProbability < posteriorThreshold;
     }
 

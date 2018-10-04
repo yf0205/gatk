@@ -15,10 +15,12 @@ import java.util.stream.IntStream;
  * @param <DATUM>     The type of observed data
  */
 public abstract class DirichletClusterer<CLUSTER, DATUM> {
-    final List<DATUM> data;
-    List<CLUSTER> clusters;
-    final Dirichlet weightsPrior;
-    final RealMatrix responsibilities;
+    private final List<DATUM> data;
+    protected List<CLUSTER> clusters;
+    private final Dirichlet weightsPrior;
+    private final RealMatrix responsibilities;
+    protected final double[] logEffectiveWeights;
+    protected final double[] log10EffectiveWeights;
 
     private static final int NUM_ITERATIONS = 10;
 
@@ -32,15 +34,16 @@ public abstract class DirichletClusterer<CLUSTER, DATUM> {
             iterate();
         }
 
+        log10EffectiveWeights = MathUtils.normalizeLog10(weightsPosterior().effectiveLog10MultinomialWeights());
+        logEffectiveWeights = MathUtils.applyToArrayInPlace(log10EffectiveWeights, x -> x * MathUtils.LOG10_OF_E);
     }
 
     public Function<DATUM, Double> mixtureModelLogLikelihood() {
-        final double[] log10EffectiveWeights = MathUtils.normalizeLog10(weightsPosterior().effectiveLog10MultinomialWeights());
-        final double[] logEffectiveWeights = MathUtils.applyToArrayInPlace(log10EffectiveWeights, x -> x * MathUtils.LOG10_OF_E);
+
 
         return new Function<DATUM, Double>() {
             final private double[] logWeights = logEffectiveWeights;
-            
+
             public Double apply(final DATUM datum) {
                 final double[] logLikelihoods = clusters.stream().mapToDouble(cluster -> logLikelihood(cluster, datum)).toArray();
                 return MathUtils.logSumExp(MathArrays.ebeAdd(logWeights, logLikelihoods));

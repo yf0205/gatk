@@ -4,11 +4,9 @@ import com.google.common.collect.Lists;
 import org.apache.commons.math.MathException;
 import org.apache.commons.math.analysis.UnivariateRealFunction;
 import org.apache.commons.math.analysis.solvers.BisectionSolver;
+import org.apache.commons.math3.util.MathArrays;
 import org.broadinstitute.hellbender.exceptions.GATKException;
-import org.broadinstitute.hellbender.utils.BetaDistributionShape;
-import org.broadinstitute.hellbender.utils.DirichletClusterer;
-import org.broadinstitute.hellbender.utils.IndexRange;
-import org.broadinstitute.hellbender.utils.MathUtils;
+import org.broadinstitute.hellbender.utils.*;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -21,6 +19,15 @@ public class AlleleFractionClusterer extends DirichletClusterer<AFCluster, Count
 
     public AlleleFractionClusterer(final List<Count> data, final double concentration) {
         super(data, concentration);
+    }
+
+    public double log10OddsCorrection(final double altCount, final double refCount) {
+        final double[] log10ClusterCorrections = clusters.stream()
+                .mapToDouble(cluster -> SomaticLikelihoodsEngine.log10OddsCorrection(
+                cluster.asDirichlet(), Dirichlet.flat(2), new double[]{altCount, refCount}))
+                .toArray();
+
+        return MathUtils.log10SumLog10(MathArrays.ebeAdd(log10ClusterCorrections, log10EffectiveWeights));
     }
 
     public double logLikelihood(final AFCluster cluster, final Count count) {

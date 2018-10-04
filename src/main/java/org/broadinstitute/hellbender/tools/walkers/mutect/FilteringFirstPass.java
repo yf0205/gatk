@@ -138,7 +138,7 @@ public class FilteringFirstPass {
                 cumulativeExpectedFPs, numPassingVariants, cumulativeExpectedFPs/numPassingVariants, requestedFDR);
     }
 
-    public boolean passesLodThreshold(final double tumorLog10Odds, final double refCount, final double altCount) {
+    public boolean passesLodThreshold(final double tumorLog10Odds, final int refCount, final int altCount) {
         Utils.validateArg(readyForSecondPass, "somatic probability should only be called after learning from first pass.");
         return afClustering.passesThreshold(tumorLog10Odds, refCount, altCount);
     }
