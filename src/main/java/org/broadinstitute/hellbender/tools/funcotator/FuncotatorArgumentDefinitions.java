@@ -192,6 +192,7 @@ public class FuncotatorArgumentDefinitions {
      */
     public enum OutputFormatType {
         VCF,
-        MAF
+        MAF,
+        SEG
     }
 }
