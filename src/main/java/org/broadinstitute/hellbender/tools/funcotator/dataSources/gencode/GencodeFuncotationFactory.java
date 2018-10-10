@@ -2683,4 +2683,18 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
         int fivePrimeUtrEnd;
     }
 
+    @Override
+    public LinkedHashSet<String> getSupportedFuncotationFieldsForSegments() {
+        return super.getSupportedFuncotationFieldsForSegments();
+    }
+
+    @Override
+    public boolean isSupportingSegmentFuncotation() {
+        return super.isSupportingSegmentFuncotation();
+    }
+
+    @Override
+    public List<Funcotation> createFuncotationsOnSegment(final VariantContext segmentVariantContext, final ReferenceContext referenceContext, final List<Feature> featureList) {
+        return super.createFuncotationsOnSegment(segmentVariantContext, referenceContext, featureList);
+    }
 }
