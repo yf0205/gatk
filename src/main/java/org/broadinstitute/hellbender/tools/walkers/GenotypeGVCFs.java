@@ -15,6 +15,8 @@ import org.broadinstitute.hellbender.tools.walkers.annotator.*;
 import org.broadinstitute.hellbender.tools.walkers.annotator.allelespecific.AS_RMSMappingQuality;
 import org.broadinstitute.hellbender.tools.walkers.genotyper.*;
 import org.broadinstitute.hellbender.tools.walkers.genotyper.afcalc.GeneralPloidyFailOverAFCalculatorProvider;
+import org.broadinstitute.hellbender.tools.walkers.mutect.M2ArgumentCollection;
+import org.broadinstitute.hellbender.utils.GATKProtectedVariantContextUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.genotyper.IndexedSampleList;
@@ -26,6 +28,9 @@ import org.broadinstitute.hellbender.utils.variant.GATKVariantContextUtils;
 import java.io.File;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static org.broadinstitute.hellbender.tools.walkers.CombineGVCFs.ALLELE_FRACTION_DELTA_LONG_NAME;
+import static org.broadinstitute.hellbender.tools.walkers.CombineGVCFs.USE_SOMATIC_LONG_NAME;
 
 /**
  * Perform joint genotyping on one or more samples pre-called with HaplotypeCaller
@@ -97,8 +102,25 @@ public final class GenotypeGVCFs extends VariantLocusWalker {
             doc="File to which variants should be written", optional=false)
     private File outputFile;
 
-    @Argument(fullName=ALL_SITES_LONG_NAME, shortName="all-sites", doc="Include loci found to be non-variant after genotyping", optional=true)
+    @Argument(fullName=ALL_SITES_LONG_NAME, shortName=ALL_SITES_SHORT_NAME, doc="Include loci found to be non-variant after genotyping", optional=true)
     private boolean includeNonVariants = false;
+
+    /**
+     * "Genotype" somatic GVCFs, outputting genotypes according to confidently called alt alleles, which may lead to inconsistent ploidy
+     * @return
+     */
+    @Argument(fullName=USE_SOMATIC_LONG_NAME, doc = "Finalize input GVCF according to somatic (i.e. Mutect2) TLODs")
+    protected boolean somaticInput = false;
+
+    @Argument(fullName=M2ArgumentCollection.EMISSION_LOD_LONG_NAME, shortName = M2ArgumentCollection.EMISSION_LOG_SHORT_NAME)
+    protected double tlodThreshold = 10.0; //TODO: come up with a real value -- 10 just sounds nice
+
+
+    /**
+     * Margin of error in allele fraction to consider a somatic variant homoplasmic, i.e. if there is less than a 0.1% reference allele fraction, those reads are likely errors
+     */
+    @Argument(fullName=ALLELE_FRACTION_DELTA_LONG_NAME)
+    protected double afTolerance = 1e-3;  //based on Q30 as a "good" base quality score
 
     @ArgumentCollection
     private GenotypeCalculationArgumentCollection genotypeArgs = new GenotypeCalculationArgumentCollection();
@@ -185,7 +207,7 @@ public final class GenotypeGVCFs extends VariantLocusWalker {
         // We only want the engine to generate the AS_QUAL key if we are using AlleleSpecific annotations.
         genotypingEngine = new MinimalGenotypingEngine(createUAC(), samples, new GeneralPloidyFailOverAFCalculatorProvider(genotypeArgs), annotationEngine.isRequestedReducibleRawKey(GATKVCFConstants.AS_QUAL_KEY));
 
-        merger = new ReferenceConfidenceVariantContextMerger(annotationEngine, getHeaderForVariants());
+        merger = new ReferenceConfidenceVariantContextMerger(annotationEngine, getHeaderForVariants(), somaticInput);
 
         if ( includeNonVariants ) {
             // Save INFO header names that require alt alleles
@@ -238,7 +260,12 @@ public final class GenotypeGVCFs extends VariantLocusWalker {
 
         ref.setWindow(10, 10); //TODO this matches the gatk3 behavior but may be unnecessary
         final VariantContext mergedVC = merger.merge(variantsToProcess, loc, includeNonVariants ? ref.getBase() : null, !includeNonVariants, false);
-        final VariantContext regenotypedVC = regenotypeVC(mergedVC, ref, features, includeNonVariants);
+        final VariantContext regenotypedVC;
+        if (somaticInput) {
+            regenotypedVC = regenotypeSomaticVC(mergedVC, ref, features, includeNonVariants);
+        } else {
+            regenotypedVC = regenotypeVC(mergedVC, ref, features, includeNonVariants);
+        }
         if (regenotypedVC != null) {
             final SimpleInterval variantStart = new SimpleInterval(regenotypedVC.getContig(), regenotypedVC.getStart(), regenotypedVC.getStart());
             if (!GATKVariantContextUtils.isSpanningDeletionOnly(regenotypedVC) &&
@@ -364,11 +391,67 @@ public final class GenotypeGVCFs extends VariantLocusWalker {
     }
 
     /**
-     * Determines whether the provided VariantContext has real alternate alleles.
-     *
-     * @param vc  the VariantContext to evaluate
-     * @return true if it has proper alternate alleles, false otherwise
+     * Re-genotype (and re-annotate) a combined genomic VC
+     * @return a new VariantContext or null if the site turned monomorphic and we don't want such sites
      */
+    private VariantContext regenotypeSomaticVC(final VariantContext originalVC, final ReferenceContext ref, final FeatureContext features, boolean includeNonVariants) {
+        Utils.nonNull(originalVC);
+
+        final VariantContext result;
+        if ( originalVC.isVariant()  && originalVC.getAttributeAsInt(VCFConstants.DEPTH_KEY,0) > 0 ) {
+            result = callSomaticGenotypes(originalVC);
+        } else if (includeNonVariants) {
+            result = originalVC;
+        }
+        else {
+            result = null;
+        }
+        return result;
+    }
+
+    private VariantContext callSomaticGenotypes(final VariantContext vc) {
+        final VariantContextBuilder builder = new VariantContextBuilder(vc);
+        GenotypeBuilder gb;
+        List<Genotype> newGenotypes = new ArrayList<>();
+        final GenotypesContext genotypes = vc.getGenotypes();
+        boolean[] keepAllele = new boolean[vc.getAlternateAlleles().size()];
+
+        for(final Genotype g : genotypes) {
+            gb = new GenotypeBuilder(g);
+            final double[] tlodArray = GATKProtectedVariantContextUtils.getAttributeAsDoubleArray(g, GATKVCFConstants.TUMOR_LOD_KEY, () -> null, 0.0);
+            final double[] variantAFArray = GATKProtectedVariantContextUtils.getAttributeAsDoubleArray(g, GATKVCFConstants.ALLELE_FRACTION_KEY, () -> null, 0.0);
+            double variantAFtotal = 0;
+            final List<Allele> calledAlleles = new ArrayList<>();
+            for(int i = 0; i < vc.getAlternateAlleles().size(); i++) {
+                variantAFtotal += variantAFArray[i];
+                if (tlodArray[i] > tlodThreshold) {
+                    calledAlleles.add(vc.getAlternateAllele(i));
+                    keepAllele[i] = true;
+                }
+            }
+            if(variantAFtotal < 1-afTolerance && (g.hasAD() ? g.getAD()[0] > 0 : true)) {
+                calledAlleles.add(0, vc.getReference());
+            }
+            //"ploidy" gets set according to the size of the alleles List in the Genotype
+            gb.alleles(calledAlleles);
+            newGenotypes.add(gb.make());
+        }
+        //TODO: do another pass over genotypes to drop the alleles that aren't called
+        for (int i = 0; i < keepAllele.length; i++) {
+            if(keepAllele[i]) {
+                return builder.genotypes(newGenotypes).make();
+            }
+        }
+        return null;
+    }
+
+
+        /**
+         * Determines whether the provided VariantContext has real alternate alleles.
+         *
+         * @param vc  the VariantContext to evaluate
+         * @return true if it has proper alternate alleles, false otherwise
+         */
     public static boolean isProperlyPolymorphic(final VariantContext vc) {
         //obvious cases
         if (vc == null || vc.getAlternateAlleles().isEmpty()) {

@@ -35,6 +35,7 @@ public class CombineGVCFsIntegrationTest extends CommandLineProgramTest {
             "RAW_MQ", //MQ data format and key have changed since GATK3
             "PS"); //PS format field was added in GATK4
     private static final File NA12878_HG37 = new File(toolsTestDir + "haplotypecaller/expected.testGVCFMode.gatk4.g.vcf");
+    private static final File MITO_REF = new File(toolsTestDir, "mutect/mito/Homo_sapiens_assembly38.mt_only.fasta");
 
 
     private static <T> void assertForEachElementInLists(final List<T> actual, final List<T> expected, final BiConsumer<T, T> assertion) {
@@ -423,5 +424,50 @@ public class CombineGVCFsIntegrationTest extends CommandLineProgramTest {
         args.addOutput(output);
         args.addVCF(getTestFile("mnp.g.vcf"));
         runCommandLine(args);
+    }
+
+    @Test
+    public void testCombineSomaticGvcfs() throws Exception {
+        final File output = createTempFile("combinegvcfs", ".vcf");
+        final ArgumentsBuilder args = new ArgumentsBuilder();
+        args.addReference(new File(b37Reference));
+        args.addOutput(output);
+        args.addVCF(getTestFile("NA12878.MT.g.vcf"));
+        args.addVCF(getTestFile("NA19240.MT.g.vcf"));
+        args.addBooleanArgument(CombineGVCFs.USE_SOMATIC_LONG_NAME, true);
+        runCommandLine(args);
+
+        final List<VariantContext> expectedVC = getVariantContexts(getTestFile("twoSamples.MT.g.vcf"));
+        final List<VariantContext> actualVC = getVariantContexts(output);
+        final VCFHeader header = getHeaderFromFile(output);
+        assertForEachElementInLists(actualVC, expectedVC, (a, e) -> VariantContextTestUtils.assertVariantContextsAreEqualAlleleOrderIndependent(a, e, Arrays.asList(), header));
+    }
+
+    //test for combining with a multi-sample input GVCF because we'll need to do a hierarchical merge in the absence of GenomicsDB support for somatic GVCFs
+    @Test
+    public void testAddToCombinedSomaticGvcf() throws Exception {
+        final File output = createTempFile("combinegvcfs", ".vcf");
+        final ArgumentsBuilder args = new ArgumentsBuilder();
+        args.addReference(new File(b37Reference));
+        args.addOutput(output);
+        args.addVCF(getTestFile("twoSamples.MT.g.vcf"));
+        args.addVCF(getTestFile("NA12891.MT.g.vcf"));
+        args.addBooleanArgument(CombineGVCFs.USE_SOMATIC_LONG_NAME, true);
+        runCommandLine(args);
+
+        final File output2 = createTempFile("expected", ".vcf");
+        final ArgumentsBuilder args2 = new ArgumentsBuilder();
+        args2.addReference(new File(b37Reference));
+        args2.addOutput(output2);
+        args2.addVCF(getTestFile("NA12878.MT.g.vcf"));
+        args2.addVCF(getTestFile("NA19240.MT.g.vcf"));
+        args2.addVCF(getTestFile("NA12891.MT.g.vcf"));
+        args2.addBooleanArgument(CombineGVCFs.USE_SOMATIC_LONG_NAME, true);
+        runCommandLine(args2);
+
+        final List<VariantContext> expectedVC = getVariantContexts(output2);
+        final List<VariantContext> actualVC = getVariantContexts(output);
+        final VCFHeader header = getHeaderFromFile(output);
+        assertForEachElementInLists(actualVC, expectedVC, (a, e) -> VariantContextTestUtils.assertVariantContextsAreEqualAlleleOrderIndependent(a, e, Arrays.asList(), header));
     }
 }

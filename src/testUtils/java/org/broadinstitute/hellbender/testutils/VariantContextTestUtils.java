@@ -187,10 +187,17 @@ public final class VariantContextTestUtils {
 
         // The above will have built new genotype for PL,AD, and SAC fields excluding the GT and GQ field, thus we must re-add them for comparison.
         for (int i = 0; i < newGT.size(); i++) {
+            final HashMap<String, Object> newGTAttributes = new HashMap<>(newGT.get(i).getExtendedAttributes());
+            for (Map.Entry<String, Object> entry : newGTAttributes.entrySet()) {
+                VCFHeaderLineCount type = header.hasInfoLine(entry.getKey())?header.getFormatHeaderLine(entry.getKey()).getCountType():VCFHeaderLineCount.UNBOUNDED;
+                int ploidy = vc.getGenotypes().getMaxPloidy(2);
+                newGTAttributes.replace(entry.getKey(), updateAttribute(entry.getKey(), entry.getValue(), vc.getAlleles(), sortedAlleles, type, ploidy));
+            }
             Genotype replacementGenotype = new GenotypeBuilder(newGT.get(i))
                     .GQ(vc.getGenotype(i).getGQ())
                     .phased(vc.getGenotype(i).isPhased())
-                    .alleles(vc.getGenotype(i).getAlleles()).make();
+                    .alleles(vc.getGenotype(i).getAlleles())
+                    .attributes(newGTAttributes).make();
             newGT.replace(replacementGenotype);
         }
 
@@ -283,6 +290,9 @@ public final class VariantContextTestUtils {
                 return Arrays.stream((double[])attribute).boxed().collect(Collectors.toList());
             }
             return Arrays.asList((Object[])attribute);
+        }
+        if (attribute instanceof String) {
+            return Arrays.asList(((String)attribute).split(","));
         }
         return Collections.singletonList(attribute);
     }

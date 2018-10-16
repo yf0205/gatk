@@ -44,6 +44,7 @@ public class GenotypeGVCFsIntegrationTest extends CommandLineProgramTest {
      private static final String BASE_PAIR_EXPECTED = "gvcf.basepairResolution.gatk3.7_30_ga4f720357.output.vcf";
     private static final String b38_reference_20_21 = largeFileTestDir + "Homo_sapiens_assembly38.20.21.fasta";
     private static final String BASE_PAIR_GVCF = "gvcf.basepairResolution.gvcf";
+    private static final File MITO_REF = new File(toolsTestDir, "mutect/mito/Homo_sapiens_assembly38.mt_only.fasta");
 
     private static final File CEUTRIO_20_21_GATK3_4_G_VCF = new File(largeFileTestDir, "gvcfs/CEUTrio.20.21.gatk3.4.g.vcf");
     private static final String CEUTRIO_20_21_EXPECTED_VCF = "CEUTrio.20.21.gatk3.7_30_ga4f720357.expected.vcf";
@@ -68,6 +69,7 @@ public class GenotypeGVCFsIntegrationTest extends CommandLineProgramTest {
     @DataProvider(name = "gvcfsToGenotype")
     public Object[][] gvcfsToGenotype() {
         return new Object[][]{
+                /*
                 //combine not supported yet, see https://github.com/broadinstitute/gatk/issues/2429 and https://github.com/broadinstitute/gatk/issues/2584
                 //{"combine.single.sample.pipeline.1.vcf", null, Arrays.asList("-V", getTestFile("combine.single.sample.pipeline.2.vcf").toString() , "-V", getTestFile("combine.single.sample.pipeline.3.vcf").toString()), b37_reference_20_21},
                 {getTestFile("leadingDeletion.g.vcf"), getTestFile("leadingDeletionRestrictToStartExpected.vcf"), Arrays.asList("-L", "20:69512-69513", "--"+GenotypeGVCFs.ONLY_OUTPUT_CALLS_STARTING_IN_INTERVALS_FULL_NAME), b37_reference_20_21},
@@ -94,6 +96,8 @@ public class GenotypeGVCFsIntegrationTest extends CommandLineProgramTest {
                 {new File(ALLELE_SPECIFIC_DIRECTORY, "NA12878.AS.chr20snippet.g.vcf"), getTestFile( "AS_Annotations.gatk3.7_30_ga4f720357.expected.g.vcf"), Arrays.asList( "-A", "ClippingRankSumTest", "-G", "AS_StandardAnnotation", "-G", "StandardAnnotation"), b37_reference_20_21},
                 {getTestFile( "multiSamples.g.vcf"), getTestFile( "multiSamples.GATK3expected.g.vcf"), Arrays.asList( "-A", "ClippingRankSumTest", "-G", "AS_StandardAnnotation", "-G", "StandardAnnotation"), b37_reference_20_21},
                 {getTestFile( "testAlleleSpecificAnnotations.CombineGVCF.output.g.vcf"), getTestFile( "testAlleleSpecificAnnotations.CombineGVCF.expected.g.vcf"), Arrays.asList( "-A", "ClippingRankSumTest", "-G", "AS_StandardAnnotation", "-G", "StandardAnnotation"), b37_reference_20_21},
+                */
+                {getTestFile( "threeSamples.MT.g.vcf"), getTestFile( "threeSamples.MT.vcf"), Arrays.asList(CombineGVCFs.USE_SOMATIC_LONG_NAME), b37Reference},
 
                 // all sites/--include-non-variant-sites tests
                 // The results from these tests differ from GATK3 in the following ways:
@@ -332,5 +336,18 @@ public class GenotypeGVCFsIntegrationTest extends CommandLineProgramTest {
         Assert.assertThrows(CommandLineException.MissingArgument.class, () -> runCommandLine(args));
         args.addArgument("L", "20:69512-69513");
         runCommandLine(args);
+    }
+
+    @Test
+    public void testGenotypingForSomaticGVCFs() {
+        final File output = createTempFile("tmp", ".vcf");
+        ArgumentsBuilder args =   new ArgumentsBuilder()
+                .addVCF(getTestFile("combined.MT.g.vcf"))
+                .addReference(MITO_REF)
+                .addOutput(output)
+                .addBooleanArgument(CombineGVCFs.USE_SOMATIC_LONG_NAME, true);
+        runCommandLine(args);
+
+        Assert.assertTrue(true);
     }
 }
