@@ -5,11 +5,15 @@ import htsjdk.variant.variantcontext.Genotype;
 import htsjdk.variant.variantcontext.VariantContext;
 import htsjdk.variant.vcf.VCFConstants;
 import org.apache.commons.math3.distribution.BinomialDistribution;
+import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.walkers.annotator.*;
 import org.broadinstitute.hellbender.tools.walkers.contamination.ContaminationRecord;
 import org.broadinstitute.hellbender.tools.walkers.contamination.MinorAlleleFractionRecord;
 import org.broadinstitute.hellbender.utils.*;
+import org.broadinstitute.hellbender.utils.io.IOUtils;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
+
+import java.io.File;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -30,12 +34,29 @@ public class Mutect2FilteringEngine {
 
     public Mutect2FilteringEngine(final M2FiltersArgumentCollection MTFAC, final String tumorSample, final Optional<String> normalSample) {
         this.MTFAC = MTFAC;
-        contamination = MTFAC.contaminationTable == null ? MTFAC.contaminationEstimate : ContaminationRecord.readFromFile(MTFAC.contaminationTable).get(0).getContamination();
         this.tumorSample = tumorSample;
         this.normalSample = normalSample;
+
+        final Optional<ContaminationRecord> contaminationRecord = MTFAC.contaminationTables.stream()
+                .map(file -> ContaminationRecord.readFromFile(file).get(0))
+                .filter(record -> record.getSample().equals(tumorSample))
+                .findFirst();
+        contamination = contaminationRecord.isPresent() ? contaminationRecord.get().getContamination() : MTFAC.contaminationEstimate;
+
         somaticPriorProb = Math.pow(10, MTFAC.log10PriorProbOfSomaticEvent);
-        final List<MinorAlleleFractionRecord> tumorMinorAlleleFractionRecords = MTFAC.tumorSegmentationTable == null ?
-                Collections.emptyList() : MinorAlleleFractionRecord.readFromFile(MTFAC.tumorSegmentationTable);
+
+        final List<MinorAlleleFractionRecord> tumorMinorAlleleFractionRecords = new ArrayList<>();
+        for (final File file : MTFAC.tumorSegmentationTables) {
+            try (final MinorAlleleFractionRecord.MinorAlleleFractionTableReader reader = new MinorAlleleFractionRecord.MinorAlleleFractionTableReader(file)) {
+                final String sample = reader.getMetadata().get(MinorAlleleFractionRecord.SAMPLE_METADATA_TAG);
+                if (sample.equals(tumorSample)) {
+                    tumorMinorAlleleFractionRecords.addAll(reader.toList());
+                    break;
+                }
+            } catch (final Exception e) {
+                throw new UserException.BadInput("Could not read sample from pileup summaries file", e);
+            }
+        }
         tumorSegments = OverlapDetector.create(tumorMinorAlleleFractionRecords);
     }
 

@@ -5,6 +5,9 @@ import htsjdk.variant.variantcontext.VariantContextBuilder;
 import htsjdk.variant.variantcontext.writer.VariantContextWriter;
 import htsjdk.variant.vcf.VCFHeader;
 import htsjdk.variant.vcf.VCFHeaderLine;
+import org.apache.commons.lang.mutable.MutableInt;
+import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.commons.lang3.tuple.Pair;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.ArgumentCollection;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
@@ -12,6 +15,7 @@ import org.broadinstitute.barclay.help.DocumentedFeature;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.engine.*;
 import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.utils.MathUtils;
 import picard.cmdline.programgroups.VariantFilteringProgramGroup;
 import org.broadinstitute.hellbender.engine.FeatureContext;
 import org.broadinstitute.hellbender.engine.ReadsContext;
@@ -22,10 +26,9 @@ import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFHeaderLines;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * <p>Filter variants in a Mutect2 VCF callset.</p>
@@ -82,9 +85,7 @@ public final class FilterMutectCalls extends TwoPassVariantWalker {
 
     private VariantContextWriter vcfWriter;
 
-    private Mutect2FilteringEngine filteringEngine;
-
-    private FilteringFirstPass filteringFirstPass;
+    private Map<String, Pair<Mutect2FilteringEngine, FilteringFirstPass>> filteringBySample;
 
     @Override
     public void onTraversalStart() {
@@ -102,12 +103,19 @@ public final class FilterMutectCalls extends TwoPassVariantWalker {
         vcfWriter = createVCFWriter(new File(outputVcf));
         vcfWriter.writeHeader(vcfHeader);
 
-        final String tumorSample = getTumorSampleName();
-        final VCFHeaderLine normalSampleHeaderLine = getHeaderForVariants().getMetaDataLine(Mutect2Engine.NORMAL_SAMPLE_KEY_IN_VCF_HEADER);
-        final Optional<String> normalSample = normalSampleHeaderLine == null ? Optional.empty() : Optional.of(normalSampleHeaderLine.getValue());
+        final Optional<String> normalSample = getNormalSampleName();
 
-        filteringEngine = new Mutect2FilteringEngine(MTFAC, tumorSample, normalSample);
-        filteringFirstPass = new FilteringFirstPass(tumorSample);
+        final List<String> tumorSamples = getHeaderForVariants().getGenotypeSamples().stream()
+                .filter(sample -> !(normalSample.isPresent() && sample.equals(normalSample.get())))
+                .collect(Collectors.toList());
+
+        filteringBySample = tumorSamples.stream()
+                .collect(Collectors.toMap(sample -> sample, sample -> ImmutablePair.of(new Mutect2FilteringEngine(MTFAC, sample, normalSample), new FilteringFirstPass(sample))));
+    }
+
+    private Optional<String> getNormalSampleName() {
+        final VCFHeaderLine normalSampleHeaderLine = getHeaderForVariants().getMetaDataLine(Mutect2Engine.NORMAL_SAMPLE_KEY_IN_VCF_HEADER);
+        return normalSampleHeaderLine == null ? Optional.empty() : Optional.of(normalSampleHeaderLine.getValue());
     }
 
     @Override
@@ -117,23 +125,50 @@ public final class FilterMutectCalls extends TwoPassVariantWalker {
 
     @Override
     public void firstPassApply(final VariantContext vc, final ReadsContext readsContext, final ReferenceContext refContext, final FeatureContext fc) {
-        final FilterResult filterResult = filteringEngine.calculateFilters(MTFAC, vc, Optional.empty());
-        filteringFirstPass.add(filterResult, vc);
+        filteringBySample.values().forEach(pair -> pair.getRight().add(pair.getLeft().calculateFilters(MTFAC, vc, Optional.empty()), vc));
     }
 
     @Override
     protected void afterFirstPass() {
-        filteringFirstPass.learnModelForSecondPass(MTFAC.maxFalsePositiveRate);
-        filteringFirstPass.writeM2FilterSummary(MTFAC.mutect2FilteringStatsTable);
+        final List<FilteringFirstPass> firstPasses = filteringBySample.values().stream().map(pair -> pair.getRight()).collect(Collectors.toList());
+        firstPasses.forEach(firstPass -> firstPass.learnModelForSecondPass(MTFAC.maxFalsePositiveRate));
+        FilteringFirstPass.writeM2FilterSummary(firstPasses, MTFAC.mutect2FilteringStatsTable);
     }
 
     @Override
     public void secondPassApply(final VariantContext vc, final ReadsContext readsContext, final ReferenceContext refContext, final FeatureContext fc) {
-        final FilterResult filterResult = filteringEngine.calculateFilters(MTFAC, vc, Optional.of(filteringFirstPass));
-        final VariantContextBuilder vcb = new VariantContextBuilder(vc);
+        final MutableInt totalAltDepth = new MutableInt(0);
+        final Map<String, MutableInt> filteredCountsByFilter = new HashMap<>();
+        final MutableInt filteredCounts = new MutableInt(0);
 
-        vcb.filters(filterResult.getFilters());
-        filterResult.getAttributes().entrySet().forEach(e -> vcb.attribute(e.getKey(), e.getValue()));
+        for (final Map.Entry<String, Pair<Mutect2FilteringEngine, FilteringFirstPass>> entry : filteringBySample.entrySet()) {
+            final String sample = entry.getKey();
+            final Mutect2FilteringEngine engine = entry.getValue().getLeft();
+            final FilteringFirstPass firstPass = entry.getValue().getRight();
+
+            final int[] alleleDepths = vc.getGenotype(sample).getAD();
+            final int altDepth = (int) MathUtils.sum(alleleDepths) - alleleDepths[0];
+
+            if (altDepth == 0) {
+                continue;
+            }
+
+            final FilterResult result = engine.calculateFilters(MTFAC, vc, Optional.of(firstPass));
+
+            totalAltDepth.add(altDepth);
+            if (!result.getFilters().isEmpty()) {
+                filteredCounts.add(altDepth);
+            }
+            result.getFilters().forEach(filter -> {
+                filteredCountsByFilter.putIfAbsent(filter, new MutableInt(0));
+               filteredCountsByFilter.get(filter).add(altDepth);
+            });
+        }
+
+        final VariantContextBuilder vcb = new VariantContextBuilder(vc);
+        if (filteredCounts.intValue() > MTFAC.filteredSampleFraction * totalAltDepth.intValue()) {
+            vcb.filters(filteredCountsByFilter.keySet());
+        }
 
         vcfWriter.add(vcb.make());
     }
@@ -143,17 +178,5 @@ public final class FilterMutectCalls extends TwoPassVariantWalker {
         if ( vcfWriter != null ) {
             vcfWriter.close();
         }
-    }
-
-    private String getTumorSampleName() {
-        return MTFAC.mitochondria ? getMitoSampleName() : getHeaderForVariants().getMetaDataLine(Mutect2Engine.TUMOR_SAMPLE_KEY_IN_VCF_HEADER).getValue();
-    }
-
-    private String getMitoSampleName() {
-        ArrayList<String> allSampleNames = getHeaderForVariants().getSampleNamesInOrder();
-        if(allSampleNames.size() != 1) {
-            throw new UserException(String.format("Expected single sample VCF in mitochondria mode, but there were %s samples.", allSampleNames.size()));
-        }
-        return allSampleNames.get(0);
     }
 }

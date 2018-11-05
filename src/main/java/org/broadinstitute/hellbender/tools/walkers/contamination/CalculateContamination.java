@@ -15,6 +15,8 @@ import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.barclay.help.DocumentedFeature;
 import org.broadinstitute.hellbender.cmdline.CommandLineProgram;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
+import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.utils.io.IOUtils;
 import picard.cmdline.programgroups.DiagnosticsAndQCProgramGroup;
 import org.broadinstitute.hellbender.tools.copynumber.utils.segmentation.KernelSegmenter;
 import org.broadinstitute.hellbender.tools.walkers.mutect.FilterMutectCalls;
@@ -22,7 +24,9 @@ import org.broadinstitute.hellbender.utils.MathUtils;
 import org.broadinstitute.hellbender.utils.OptimizationUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -153,11 +157,12 @@ public class CalculateContamination extends CommandLineProgram {
 
     @Override
     public Object doWork() {
-        final List<PileupSummary> sites = filterSites(PileupSummary.readFromFile(inputPileupSummariesTable));
-
+        final Pair<String, List<PileupSummary>> sampleAndsites = PileupSummary.readFromFile(inputPileupSummariesTable);
+        final String sample = sampleAndsites.getLeft();
+        final List<PileupSummary> sites = filterSites(sampleAndsites.getRight());
         // used the matched normal to genotype (i.e. find hom alt sites) if available
         final List<PileupSummary> genotypingSites = matchedPileupSummariesTable == null ? sites :
-                filterSites(PileupSummary.readFromFile(matchedPileupSummariesTable));
+                filterSites(PileupSummary.readFromFile(matchedPileupSummariesTable).getRight());
 
         // we partition the genome into contiguous allelic copy-number segments in order to infer the local minor
         // allele fraction at each site.  This is important because a minor allele fraction close to 1/2 (neutral)
@@ -193,15 +198,15 @@ public class CalculateContamination extends CommandLineProgram {
                     genotypingSegments : findSegments(sites);
             List<MinorAlleleFractionRecord> tumorMinorAlleleFractions = tumorSegments.stream()
                     .map(this::makeMinorAlleleFractionRecord).collect(Collectors.toList());
-            MinorAlleleFractionRecord.writeToFile(tumorMinorAlleleFractions, outputTumorSegmentation);
-
+            MinorAlleleFractionRecord.writeToFile(sample, tumorMinorAlleleFractions, outputTumorSegmentation);
         }
 
         final List<PileupSummary> homAltSites = subsetSites(sites, homAltGenotypingSites);
         final Pair<Double, Double> contaminationAndError = calculateContamination(homAltSites, errorRate(sites));
         final double contamination = contaminationAndError.getLeft();
         final double error = contaminationAndError.getRight();
-        ContaminationRecord.writeToFile(Arrays.asList(new ContaminationRecord(ContaminationRecord.Level.WHOLE_BAM.toString(), contamination, error)), outputTable);
+
+        ContaminationRecord.writeToFile(Arrays.asList(new ContaminationRecord(sample, ContaminationRecord.Level.WHOLE_BAM.toString(), contamination, error)), outputTable);
 
         return "SUCCESS";
     }

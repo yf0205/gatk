@@ -4,6 +4,8 @@ import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.hellbender.tools.walkers.haplotypecaller.AssemblyBasedCallerArgumentCollection;
 
 import java.io.File;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 public class M2FiltersArgumentCollection extends AssemblyBasedCallerArgumentCollection {
     private static final long serialVersionUID = 9345L;
@@ -34,6 +36,7 @@ public class M2FiltersArgumentCollection extends AssemblyBasedCallerArgumentColl
     public static final String STRICT_STRAND_BIAS_LONG_NAME = "strict-strand-bias";
     public static final String LOD_BY_DEPTH = "lod-divided-by-depth";
     public static final String NON_MT_ALT_READS_BY_ALT_READS = "non-mt-alts-divided-by-alts";
+    public static final String FRACTION_OF_FILTERED_SAMPLES_LONG_NAME = "filtered-sample-fraction";
 
     public static final String FILTERING_STATS_LONG_NAME = "stats";
 
@@ -44,7 +47,7 @@ public class M2FiltersArgumentCollection extends AssemblyBasedCallerArgumentColl
      */
     @Argument(fullName = TUMOR_SEGMENTATION_LONG_NAME,
             doc="Pileup summaries for the tumor sample as output by CalculateContamination", optional = true)
-    public File tumorSegmentationTable = null;
+    public Set<File> tumorSegmentationTables = new LinkedHashSet<>(0);
 
     /**
      * Prior log-10 probability that any given site has a somatic allele. Impacts germline probability calculation.
@@ -110,7 +113,7 @@ public class M2FiltersArgumentCollection extends AssemblyBasedCallerArgumentColl
     public double strandArtifactAlleleFractionThreshold = 0.01;
 
     @Argument(fullName = CONTAMINATION_TABLE_LONG_NAME, optional = true, doc = "Table containing contamination information.")
-    public File contaminationTable = null;
+    public Set<File> contaminationTables = new LinkedHashSet<>(0);
 
     @Argument(fullName = CONTAMINATION_ESTIMATE_LONG_NAME, optional = true, doc = "Estimate of contamination.")
     public double contaminationEstimate = 0;
@@ -154,6 +157,13 @@ public class M2FiltersArgumentCollection extends AssemblyBasedCallerArgumentColl
      */
     @Argument(fullName = NON_MT_ALT_READS_BY_ALT_READS, doc="Known NuMT alts by total alts threshold for filtering variant", optional = true)
     public double nonMtAltByAlt = 0.85;
+
+    /**
+     * To filter a multi-sample variant, we calculate the single-sample filters in isolation, then compute the fraction of alt reads in filtered samples.
+     * This is the threshold for that fraction required to filter the variant.
+     */
+    @Argument(fullName = FRACTION_OF_FILTERED_SAMPLES_LONG_NAME, doc="Threshold for weighted-by-alt-depth fraction of filtered sample to filter a multi-sample variant call.", optional = true)
+    public double filteredSampleFraction = 0.5;
 
     /**
      * Mitochondria mode includes "LOD by depth" and "Non MT alt reads by alt reads" filters, which are not included

@@ -3,6 +3,7 @@ package org.broadinstitute.hellbender.tools.walkers.contamination;
 import htsjdk.variant.variantcontext.VariantContext;
 import htsjdk.variant.vcf.VCFConstants;
 import htsjdk.variant.vcf.VCFHeader;
+import htsjdk.variant.vcf.VCFHeaderLine;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.BetaFeature;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
@@ -16,7 +17,9 @@ import org.broadinstitute.hellbender.engine.filters.ReadFilterLibrary;
 import org.broadinstitute.hellbender.engine.filters.WellformedReadFilter;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.GATKProtectedVariantContextUtils;
+import org.broadinstitute.hellbender.utils.io.IOUtils;
 import org.broadinstitute.hellbender.utils.pileup.ReadPileup;
+import org.broadinstitute.hellbender.utils.read.ReadUtils;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -210,7 +213,8 @@ public class GetPileupSummaries extends LocusWalker {
         if (sawVariantsWithoutAlleleFrequency && !sawVariantsWithAlleleFrequency) {
             throw new UserException.BadInput("No variants in population vcf had an allele frequency (AF) field.");
         }
-        PileupSummary.writeToFile(pileupSummaries, outputTable);
+        final String sampleName = ReadUtils.getSamplesFromHeader(getHeaderForReads()).stream().findFirst().get();
+        PileupSummary.writeToFile(sampleName, pileupSummaries, outputTable);
         return "SUCCESS";
     }
 

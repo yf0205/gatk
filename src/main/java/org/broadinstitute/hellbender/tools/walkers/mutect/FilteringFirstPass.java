@@ -210,4 +210,15 @@ public class FilteringFirstPass {
             throw new UserException(String.format("Encountered an IO exception while writing to %s.", outputTable), e);
         }
     }
+
+    public static void writeM2FilterSummary(final List<FilteringFirstPass> firstPasses, final File outputTable) {
+        try (Mutect2FilterStatsWriter writer = new Mutect2FilterStatsWriter(outputTable)) {
+            for (final FilteringFirstPass firstPass : firstPasses) {
+                writer.writeComment("Filtering stats for sample " + firstPass.tumorSample);
+                writer.writeAllRecords(firstPass.filterStats.values());
+            }
+        } catch (IOException e) {
+            throw new UserException(String.format("Encountered an IO exception while writing to %s.", outputTable), e);
+        }
+    }
 }

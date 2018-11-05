@@ -569,35 +569,6 @@ public class Mutect2IntegrationTest extends CommandLineProgramTest {
         }
     }
 
-   @Test
-   @SuppressWarnings("deprecation")
-   public void testAFfromADoverHighDP() throws Exception {
-        Utils.resetRandomGenerator();
-        final File unfilteredVcf = createTempFile("unfiltered", ".vcf");
-
-        final List<String> args = Arrays.asList("-I", DEEP_MITO_BAM.getAbsolutePath(),
-                "-" + M2ArgumentCollection.TUMOR_SAMPLE_SHORT_NAME, DEEP_MITO_SAMPLE_NAME,
-                "-R", MITO_REF.getAbsolutePath(),
-                "-L", "chrM:1-1018",
-                "-ip", "300",
-                "-min-pruning", "4",
-                "--" + M2ArgumentCollection.GET_AF_FROM_AD_LONG_NAME,
-                "-O", unfilteredVcf.getAbsolutePath());
-        runCommandLine(args);
-
-        final List<VariantContext> variants = VariantContextTestUtils.streamVcf(unfilteredVcf).collect(Collectors.toList());
-
-        for (final VariantContext vc : variants) {
-            Assert.assertTrue(vc.isBiallelic()); //I do some lazy parsing below that won't hold for multiple alternate alleles
-            Genotype g = vc.getGenotype(DEEP_MITO_SAMPLE_NAME);
-            Assert.assertTrue(g.hasAD());
-            final int[] ADs = g.getAD();
-            Assert.assertTrue(g.hasExtendedAttribute(GATKVCFConstants.ALLELE_FRACTION_KEY));
-            //Assert.assertEquals(Double.parseDouble(String.valueOf(vc.getGenotype(DEEP_MITO_SAMPLE_NAME).getExtendedAttribute(GATKVCFConstants.ALLELE_FRACTION_KEY,"0"))), (double)ADs[1]/(ADs[0]+ADs[1]), 1e-6);
-            Assert.assertEquals(Double.parseDouble(String.valueOf(vc.getGenotype(DEEP_MITO_SAMPLE_NAME).getAttributeAsString(GATKVCFConstants.ALLELE_FRACTION_KEY,"0"))), (double)ADs[1]/(ADs[0]+ADs[1]), 1e-6);
-        }
-    }
-
     @DataProvider(name="bamoutVariations")
     public Object[][] bamoutVariations() {
         return new Object[][]{

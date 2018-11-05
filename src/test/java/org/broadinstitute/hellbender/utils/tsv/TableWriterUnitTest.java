@@ -167,15 +167,17 @@ public final class TableWriterUnitTest extends GATKBaseTest {
         records.add(new String[]{"1", "2", "3"});
         records.add(new String[]{"4", "5", "6"});
         records.add(new String[]{"-1", "-2", "-3"});
+        writer.writeMetadata("key", "value");
         writer.writeAllRecords(records);
         writer.close();
 
         final List<String> outLines = outputLines(testFile);
-        Assert.assertEquals(outLines.size(), 4, outLines.toString());
-        Assert.assertEquals(outLines.get(0), String.join("" + TableUtils.COLUMN_SEPARATOR, "col1", "col2", "col3"));
-        Assert.assertEquals(outLines.get(1), String.join("" + TableUtils.COLUMN_SEPARATOR, "1", "2", "3"));
-        Assert.assertEquals(outLines.get(2), String.join("" + TableUtils.COLUMN_SEPARATOR, "4", "5", "6"));
-        Assert.assertEquals(outLines.get(3), String.join("" + TableUtils.COLUMN_SEPARATOR, "-1", "-2", "-3"));
+        Assert.assertEquals(outLines.size(), 5, outLines.toString());
+        Assert.assertEquals(outLines.get(0), TableUtils.COMMENT_PREFIX + TableWriter.METADATA_TAG + "key=value");
+        Assert.assertEquals(outLines.get(1), String.join("" + TableUtils.COLUMN_SEPARATOR, "col1", "col2", "col3"));
+        Assert.assertEquals(outLines.get(2), String.join("" + TableUtils.COLUMN_SEPARATOR, "1", "2", "3"));
+        Assert.assertEquals(outLines.get(3), String.join("" + TableUtils.COLUMN_SEPARATOR, "4", "5", "6"));
+        Assert.assertEquals(outLines.get(4), String.join("" + TableUtils.COLUMN_SEPARATOR, "-1", "-2", "-3"));
     }
 
     @Test

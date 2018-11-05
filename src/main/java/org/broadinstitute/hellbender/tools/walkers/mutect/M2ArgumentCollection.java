@@ -54,6 +54,8 @@ public class M2ArgumentCollection extends AssemblyBasedCallerArgumentCollection 
     //TODO: so for now we require the user to specify bams *both* as inputs, with -I tumor.bam -I normal.bam
     //TODO: *and* as sample names e.g. -tumor <tumor sample> -normal <normal sample>
 
+    // As of GATK 4.0.12.0, any sample not specified as the normal is considered a tumor sample
+    @Deprecated
     @Argument(fullName = TUMOR_SAMPLE_LONG_NAME, shortName = TUMOR_SAMPLE_SHORT_NAME, doc = "BAM sample name of tumor.  May be URL-encoded as output by GetSampleName with -encode argument.", optional = true)
     protected String tumorSample = null;
 
@@ -189,10 +191,6 @@ public class M2ArgumentCollection extends AssemblyBasedCallerArgumentCollection 
      */
     @Argument(fullName= IGNORE_ITR_ARTIFACTS_LONG_NAME, doc="Turn off read transformer that clips artifacts associated with end repair insertions near inverted tandem repeats.", optional = true)
     public boolean dontClipITRArtifacts = false;
-
-    @Advanced
-    @Argument(fullName = GET_AF_FROM_AD_LONG_NAME, doc="Use allelic depth to calculate tumor allele fraction; recommended for mitochondrial applications", optional = true)
-    public boolean calculateAFfromAD = false;
 
     /**
      * If set to true, count an overlapping read pair as two separate reads instead of one for {@link StrandArtifact} and {@link StrandBiasBySample} annotations,
