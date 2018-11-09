@@ -5,6 +5,7 @@ import htsjdk.variant.variantcontext.VariantContextBuilder;
 import htsjdk.variant.variantcontext.writer.VariantContextWriter;
 import htsjdk.variant.vcf.VCFHeader;
 import htsjdk.variant.vcf.VCFHeaderLine;
+import it.unimi.dsi.fastutil.Hash;
 import org.apache.commons.lang.mutable.MutableInt;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
@@ -165,7 +166,7 @@ public final class FilterMutectCalls extends TwoPassVariantWalker {
             });
         }
 
-        final VariantContextBuilder vcb = new VariantContextBuilder(vc);
+        final VariantContextBuilder vcb = new VariantContextBuilder(vc).filters(new HashSet<>());;
         if (filteredCounts.intValue() > MTFAC.filteredSampleFraction * totalAltDepth.intValue()) {
             vcb.filters(filteredCountsByFilter.keySet());
         }

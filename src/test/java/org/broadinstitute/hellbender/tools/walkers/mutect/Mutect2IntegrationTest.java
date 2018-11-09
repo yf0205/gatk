@@ -22,6 +22,7 @@ import org.broadinstitute.hellbender.tools.walkers.validation.ConcordanceSummary
 import org.broadinstitute.hellbender.utils.GATKProtectedVariantContextUtils;
 import org.broadinstitute.hellbender.utils.MathUtils;
 import org.broadinstitute.hellbender.utils.Utils;
+import org.broadinstitute.hellbender.utils.io.IOUtils;
 import org.broadinstitute.hellbender.utils.read.ArtificialReadUtils;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
 import org.broadinstitute.hellbender.utils.read.SAMFileGATKReadWriter;
@@ -133,7 +134,7 @@ public class Mutect2IntegrationTest extends CommandLineProgramTest {
         // and no allele has length 1.
         VariantContextTestUtils.streamVcf(unfilteredVcf)
                 .forEach(vc -> {
-                    final Genotype tumorGenotype = vc.getGenotype(tumor);
+                    final Genotype tumorGenotype = vc.getGenotype(IOUtils.urlDecode(tumor));
                     final int[] f1r2 = OrientationBiasUtils.getF1R2(tumorGenotype);
                     Assert.assertEquals(f1r2.length, vc.getNAlleles());
                     if (vc.getAlleles().stream().filter(a -> !a.isSymbolic()).map(a -> a.getBases()[0]).distinct().count() == 1) {
