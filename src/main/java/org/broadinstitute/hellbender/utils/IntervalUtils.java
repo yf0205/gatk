@@ -1261,6 +1261,13 @@ public final class IntervalUtils {
 
     // (end of shard-related code)
 
+    public static List<SimpleInterval> getSpanningIntervals(final List<? extends Locatable> locations){
+        return locations.stream()
+                .collect(Collectors.groupingBy(Locatable::getContig))
+                .values().stream().map(IntervalUtils::getSpanningInterval)
+                .collect(Collectors.toList());
+    }
+
     /**
      * Combine the breakpoints of multiple intervals and return a list of locatables based on the updated breakpoints.
      *
