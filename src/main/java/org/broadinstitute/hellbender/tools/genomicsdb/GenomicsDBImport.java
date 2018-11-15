@@ -32,6 +32,7 @@ import org.broadinstitute.hellbender.cmdline.programgroups.ShortVariantDiscovery
 import org.broadinstitute.hellbender.engine.GATKTool;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.utils.IntervalUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.gcs.BucketUtils;
@@ -516,7 +517,7 @@ public final class GenomicsDBImport extends GATKTool {
         return null;
     }
 
-    private List<GenomicsDBImportConfiguration.Partition> generatePartitionListFromIntervals(List<ChromosomeInterval> chromosomeIntervals) {
+    private List<GenomicsDBImportConfiguration.Partition> generatePartitionListFromIntervals(List<SimpleInterval> chromosomeIntervals) {
         return chromosomeIntervals.stream().map(interval -> {
             GenomicsDBImportConfiguration.Partition.Builder partitionBuilder = GenomicsDBImportConfiguration.Partition.newBuilder();
             Coordinates.ContigPosition.Builder contigPositionBuilder = Coordinates.ContigPosition.newBuilder();
@@ -536,7 +537,8 @@ public final class GenomicsDBImport extends GATKTool {
     }
 
     private ImportConfig createImportConfig(final int batchSize) {
-        final List<GenomicsDBImportConfiguration.Partition> partitions = generatePartitionListFromIntervals(intervals);
+        final List<SimpleInterval> spanningIntervals = IntervalUtils.getSpanningIntervals(intervals, getReferenceDictionary());
+        final List<GenomicsDBImportConfiguration.Partition> partitions = generatePartitionListFromIntervals(spanningIntervals);
         GenomicsDBImportConfiguration.ImportConfiguration.Builder importConfigurationBuilder =
                 GenomicsDBImportConfiguration.ImportConfiguration.newBuilder();
         importConfigurationBuilder.addAllColumnPartitions(partitions);

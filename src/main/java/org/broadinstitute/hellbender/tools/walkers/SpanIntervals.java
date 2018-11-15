@@ -78,7 +78,7 @@ public class SpanIntervals extends GATKTool {
         }
         final List<SimpleInterval> intervals = intervalArgumentCollection.getIntervals(sequenceDictionary);
 
-        final List<SimpleInterval> spanningIntervals = IntervalUtils.getSpanningIntervals(intervals);
+        final List<SimpleInterval> spanningIntervals = IntervalUtils.getSpanningIntervals(intervals, sequenceDictionary);
 
         final IntervalList intervalList = new IntervalList(sequenceDictionary);
         spanningIntervals.stream().map(si -> new Interval(si.getContig(), si.getStart(), si.getEnd())).forEach(intervalList::add);

@@ -1261,10 +1261,10 @@ public final class IntervalUtils {
 
     // (end of shard-related code)
 
-    public static List<SimpleInterval> getSpanningIntervals(final List<? extends Locatable> locations){
+    public static List<SimpleInterval> getSpanningIntervals(final List<? extends Locatable> locations, final SAMSequenceDictionary sequenceDictionary){
         return locations.stream()
                 .collect(Collectors.groupingBy(Locatable::getContig))
-                .values().stream().map(IntervalUtils::getSpanningInterval)
+                .values().stream().map(IntervalUtils::getSpanningInterval).sorted((i1,i2)->compareLocatables(i1,i2,sequenceDictionary))
                 .collect(Collectors.toList());
     }
 
