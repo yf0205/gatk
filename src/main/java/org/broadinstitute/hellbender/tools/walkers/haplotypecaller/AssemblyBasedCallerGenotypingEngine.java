@@ -345,64 +345,6 @@ public abstract class AssemblyBasedCallerGenotypingEngine extends GenotypingEngi
         return false;
     }
 
-    // Builds the read-likelihoods collection to use for annotation considering user arguments and the collection
-    // used for genotyping.
-    protected ReadLikelihoods<Allele> prepareReadAlleleLikelihoodsForAnnotation(
-            final ReadLikelihoods<Haplotype> readHaplotypeLikelihoods,
-            final Map<String, List<GATKRead>> perSampleFilteredReadList,
-            final boolean emitReferenceConfidence,
-            final Map<Allele, List<Haplotype>> alleleMapper,
-            final ReadLikelihoods<Allele> readAlleleLikelihoodsForGenotyping,
-            final VariantContext call) {
-
-        final ReadLikelihoods<Allele> readAlleleLikelihoodsForAnnotations;
-        final SimpleInterval loc = new SimpleInterval(call);
-
-        // We can reuse for annotation the likelihood for genotyping as long as there is no contamination filtering
-        // or the user want to use the contamination filtered set for annotations.
-        // Otherwise (else part) we need to do it again.
-        if (configuration.useFilteredReadMapForAnnotations || !configuration.isSampleContaminationPresent()) {
-            readAlleleLikelihoodsForAnnotations = readAlleleLikelihoodsForGenotyping;
-            readAlleleLikelihoodsForAnnotations.filterToOnlyOverlappingReads(loc);
-        } else {
-            readAlleleLikelihoodsForAnnotations = readHaplotypeLikelihoods.marginalize(alleleMapper, loc);
-            if (emitReferenceConfidence) {
-                readAlleleLikelihoodsForAnnotations.addNonReferenceAllele(Allele.NON_REF_ALLELE);
-            }
-        }
-
-        if (call.getAlleles().size() != readAlleleLikelihoodsForAnnotations.numberOfAlleles()) {
-            readAlleleLikelihoodsForAnnotations.updateNonRefAlleleLikelihoods(new IndexedAlleleList<>(call.getAlleles()));
-        }
-
-        // Skim the filtered map based on the location so that we do not add filtered read that are going to be removed
-        // right after a few lines of code below.
-        final Map<String, List<GATKRead>> overlappingFilteredReads = overlappingFilteredReads(perSampleFilteredReadList, loc);
-
-        readAlleleLikelihoodsForAnnotations.addReads(overlappingFilteredReads,0);
-
-        return readAlleleLikelihoodsForAnnotations;
-    }
-
-    private static Map<String, List<GATKRead>> overlappingFilteredReads(final Map<String, List<GATKRead>> perSampleFilteredReadList, final SimpleInterval loc) {
-        final Map<String,List<GATKRead>> overlappingFilteredReads = new HashMap<>(perSampleFilteredReadList.size());
-
-        for (final Map.Entry<String,List<GATKRead>> sampleEntry : perSampleFilteredReadList.entrySet()) {
-            final List<GATKRead> originalList = sampleEntry.getValue();
-            final String sample = sampleEntry.getKey();
-            if (originalList == null || originalList.isEmpty()) {
-                continue;
-            }
-            final List<GATKRead> newList = originalList.stream()
-                    .filter(read -> read.overlaps(loc))
-                    .collect(Collectors.toCollection(() -> new ArrayList<>(originalList.size())));
-
-            if (!newList.isEmpty()) {
-                overlappingFilteredReads.put(sample,newList);
-            }
-        }
-        return overlappingFilteredReads;
-    }
 
     /**
      * Tries to phase the individual alleles based on pairwise comparisons to the other alleles based on all called haplotypes

@@ -138,4 +138,8 @@ public class HaplotypeCallerArgumentCollection extends AssemblyBasedCallerArgume
             doc = "Two or more phased substitutions separated by this distance or less are merged into MNPs. " +
             "WARNING: When used in GVCF mode, resulting GVCFs cannot be joint-genotyped.", optional = true)
     public int maxMnpDistance = 0;
+
+    @Advanced
+    @Argument(fullName= USE_FILTERED_READS_FOR_ANNOTATIONS_LONG_NAME, doc = "Use the contamination-filtered read maps for the purposes of annotating variants", optional=true)
+    public boolean useFilteredReadMapForAnnotations = false;
 }

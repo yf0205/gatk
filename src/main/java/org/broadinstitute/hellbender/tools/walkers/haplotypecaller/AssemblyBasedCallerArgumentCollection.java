@@ -39,10 +39,6 @@ public abstract class AssemblyBasedCallerArgumentCollection extends StandardCall
     @Argument(fullName="debug", shortName="debug", doc="Print out very verbose debug information about each triggering active region", optional = true)
     public boolean debug;
 
-    @Advanced
-    @Argument(fullName= USE_FILTERED_READS_FOR_ANNOTATIONS_LONG_NAME, doc = "Use the contamination-filtered read maps for the purposes of annotating variants", optional=true)
-    public boolean useFilteredReadMapForAnnotations = false;
-
     /**
      * The assembled haplotypes and locally realigned reads will be written as BAM to this file if requested.  Really
      * for debugging purposes only. Note that the output here does not include uninformative reads so that not every
