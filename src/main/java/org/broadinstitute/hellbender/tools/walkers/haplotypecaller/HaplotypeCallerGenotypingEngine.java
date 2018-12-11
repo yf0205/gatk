@@ -169,7 +169,7 @@ public class HaplotypeCallerGenotypingEngine extends AssemblyBasedCallerGenotypi
             mergedVC = removeAltAllelesIfTooManyGenotypes(ploidy, alleleMapper, mergedVC);
 
             ReadLikelihoods<Allele> readAlleleLikelihoods = readLikelihoods.marginalize(alleleMapper);
-            readAlleleLikelihoods.filterToOnlyOverlappingReads(new SimpleInterval(mergedVC).expandWithinContig(ALLELE_EXTENSION, header.getSequenceDictionary()));
+            readAlleleLikelihoods.filterToOnlyOverlappingReads(new SimpleInterval(mergedVC).expandWithinContig(informativeReadOverlapRadius, header.getSequenceDictionary()));
             if (configuration.isSampleContaminationPresent()) {
                 readAlleleLikelihoods.contaminationDownsampling(configuration.getSampleContamination());
             }

@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
  */
 public abstract class AssemblyBasedCallerGenotypingEngine extends GenotypingEngine<AssemblyBasedCallerArgumentCollection> {
 
-    protected static final int ALLELE_EXTENSION = 2;
+    protected final int informativeReadOverlapRadius;
     protected final boolean doPhysicalPhasing;
     private static final String phase01 = "0|1";
     private static final String phase10 = "1|0";
@@ -35,15 +35,18 @@ public abstract class AssemblyBasedCallerGenotypingEngine extends GenotypingEngi
      * @param samples {@inheritDoc}
      * @param doPhysicalPhasing whether to try physical phasing.
      */
-    public AssemblyBasedCallerGenotypingEngine(final AssemblyBasedCallerArgumentCollection configuration, final SampleList samples,
-                                           final AFCalculatorProvider afCalculatorProvider, final boolean doPhysicalPhasing) {
+    public AssemblyBasedCallerGenotypingEngine(final AssemblyBasedCallerArgumentCollection configuration,
+                                               final SampleList samples, final AFCalculatorProvider afCalculatorProvider,
+                                               final boolean doPhysicalPhasing) {
         super(configuration, samples, afCalculatorProvider, false);
         this.doPhysicalPhasing= doPhysicalPhasing;
+        this.informativeReadOverlapRadius = configuration.informativeReadOverlapRadius;
     }
 
     @Override
     protected boolean forceSiteEmission() {
-        return configuration.outputMode == OutputMode.EMIT_ALL_SITES || configuration.genotypingOutputMode == GenotypingOutputMode.GENOTYPE_GIVEN_ALLELES;
+        return configuration.outputMode == OutputMode.EMIT_ALL_SITES
+                || configuration.genotypingOutputMode == GenotypingOutputMode.GENOTYPE_GIVEN_ALLELES;
     }
 
     /**

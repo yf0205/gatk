@@ -117,7 +117,7 @@ public class SomaticGenotypingEngine extends AssemblyBasedCallerGenotypingEngine
             // converting ReadLikelihoods<Haplotype> to ReadLikelihoods<Allele>
             final Map<Allele, List<Haplotype>> alleleMapper = createAlleleMapper(mergedVC, loc, haplotypes);
             final ReadLikelihoods<Allele> log10Likelihoods = log10ReadLikelihoods.marginalize(alleleMapper);
-            log10Likelihoods.filterToOnlyOverlappingReads(new SimpleInterval(mergedVC).expandWithinContig(ALLELE_EXTENSION, header.getSequenceDictionary()));
+            log10Likelihoods.filterToOnlyOverlappingReads(new SimpleInterval(mergedVC).expandWithinContig(informativeReadOverlapRadius, header.getSequenceDictionary()));
             filterOverlappingReads(log10Likelihoods, mergedVC.getReference(), loc, false);
 
             final LikelihoodMatrix<Allele> log10TumorMatrix = log10Likelihoods.sampleMatrix(log10Likelihoods.indexOfSample(tumorSample));
