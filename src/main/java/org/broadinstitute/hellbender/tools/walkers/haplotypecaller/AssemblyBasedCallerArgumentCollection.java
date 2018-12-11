@@ -135,6 +135,6 @@ public abstract class AssemblyBasedCallerArgumentCollection extends StandardCall
     @Argument(fullName = ALLELE_EXTENSION_LONG_NAME,
             doc = "Likelihood and read-based annotations will only take in consideration reads " +
                     "that overlap the variant or any base on further than this distance expressed in base pairs")
-    public int informativeReadOverlapRadius = 2;
+    public int informativeReadOverlapRadius = 0;
 
 }
