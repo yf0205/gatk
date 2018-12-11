@@ -398,9 +398,14 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
 
     @Override
     protected List<Funcotation> createDefaultFuncotationsOnVariant( final VariantContext variant, final ReferenceContext referenceContext ) {
-        final List<Funcotation> funcotationList = new ArrayList<>();
-        funcotationList.addAll(createIgrFuncotations(variant, referenceContext));
-        return funcotationList;
+        if (isSegmentVariantContext(variant)) {
+            return createSegmentFuncotations(variant, Collections.emptyList());
+        } else {
+            // Simply create IGR
+            final List<Funcotation> funcotationList = new ArrayList<>();
+            funcotationList.addAll(createIgrFuncotations(variant, referenceContext));
+            return funcotationList;
+        }
     }
 
     private List<GencodeFuncotation> createGencodeFuncotationsByAllTranscripts( final VariantContext variant, final ReferenceContext referenceContext, final Allele altAllele, final List<GencodeGtfGeneFeature> gencodeGtfGeneFeatures) {
@@ -2730,11 +2735,14 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
 
         // Get the genes funcotation field
         final List<String> genes = retrieveGeneNamesFromTranscripts(allBasicTranscripts).stream().sorted().collect(Collectors.toList());
-        // TODO: Fix magic constants.
-        final Funcotation result = TableFuncotation.create(Collections.singletonList(getName() + "_" + getVersion() + "_genes"), Collections.singletonList(StringUtils.join(genes, ",")),
-            segmentVariantContext.getAlternateAllele(0), getName(), createSegmentFuncotationMetadata());
 
-        return Collections.singletonList(result);
+        // TODO: Fix magic constants.
+        return createSegmentFuncotations(segmentVariantContext, genes);
+    }
+
+    private List<Funcotation> createSegmentFuncotations(final VariantContext segmentVariantContext, final List<String> genes) {
+        return segmentVariantContext.getAlternateAlleles().stream().map(a -> TableFuncotation.create(Collections.singletonList(getName() + "_" + getVersion() + "_genes"), Collections.singletonList(StringUtils.join(genes, ",")),
+            a, getName(), createSegmentFuncotationMetadata())).collect(Collectors.toList());
     }
 
     private static Set<String> retrieveGeneNamesFromTranscripts(final List<GencodeGtfTranscriptFeature> txs) {

@@ -19,6 +19,7 @@ import org.broadinstitute.hellbender.tools.funcotator.dataSources.DataSourceUtil
 import org.broadinstitute.hellbender.tools.funcotator.dataSources.gencode.GencodeFuncotation;
 import org.broadinstitute.hellbender.tools.funcotator.mafOutput.MafOutputRenderer;
 import org.broadinstitute.hellbender.tools.funcotator.metadata.FuncotationMetadata;
+import org.broadinstitute.hellbender.tools.funcotator.simpletsvoutput.SimpleTsvOutputRenderer;
 import org.broadinstitute.hellbender.tools.funcotator.vcfOutput.VcfOutputRenderer;
 import org.broadinstitute.hellbender.transformers.VariantTransformer;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
@@ -28,6 +29,7 @@ import org.broadinstitute.hellbender.utils.io.IOUtils;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -178,6 +180,41 @@ public final class FuncotatorEngine implements AutoCloseable {
         return funcotationMap;
     }
 
+    /** //TODO: Update docs
+     * TODO: Tests
+     * Creates a {@link FuncotationMap} for the given {@code variantContext}.
+     *
+     * @param segmentAsVariantContext   {@link VariantContext} to annotate.  Never {@code null}.
+     * @param referenceContext {@link ReferenceContext} corresponding to the given {@code variantContext}.  Never {@code null}.
+     * @param featureContext {@link FeatureContext} corresponding to the given {@code variantContext}.  Never {@code null}.
+     * @return an instance of FuncotationMap that maps transcript IDs to lists of funcotations for the given variantContext context.
+     */
+    public FuncotationMap createFuncotationMapForSegment(final VariantContext segmentAsVariantContext,
+                                                         final ReferenceContext referenceContext,
+                                                         final FeatureContext featureContext) {
+
+        Utils.nonNull(segmentAsVariantContext);
+        Utils.nonNull(referenceContext);
+        Utils.nonNull(featureContext);
+
+        //==============================================================================================================
+        // We do not need to treat the Gencode funcotations as a special case
+
+        if (retrieveGencodeFuncotationFactoryStream().count() > 1) {
+            logger.warn("Attempting to annotate with more than one GENCODE datasource.  If these have overlapping transcript IDs, errors may occur.");
+        }
+
+        final List<Funcotation> funcotations = dataSourceFactories.stream()
+                .filter(ff -> ff.isSupportingSegmentFuncotation())
+                .map(ff -> ff.createFuncotations(segmentAsVariantContext, referenceContext,
+                        featureContext))
+                .flatMap(List::stream)
+                .collect(Collectors.toList());
+
+        // Create a place to keep our funcotations:
+        return FuncotationMap.createNoTranscriptInfo(funcotations);
+    }
+
     /**
      * Create an output renderer for the data created by this instance of {@link FuncotatorEngine}.
      * @param annotationDefaultsMap {@link LinkedHashMap<String, String>} of annotation names and their default values.
@@ -222,15 +259,14 @@ public final class FuncotatorEngine implements AutoCloseable {
                 );
                 break;
                 // TODO: Make sure this SEG block is correct.  Still needs composite output renderer probably.
+            // TODO: Magic constant (resource location)
             case SEG:
-//                outputRenderer = new SimpleTsvOutputRenderer(funcotatorArgs.outputFile.toPath(),
-//                        getFuncotationFactories(),
-//                        headerForVariants,
-//                        unaccountedForDefaultAnnotations,
-//                        unaccountedForOverrideAnnotations,
-//                        defaultToolVcfHeaderLines.stream().map(Object::toString).collect(Collectors.toCollection(LinkedHashSet::new)),
-//                        funcotatorArgs.referenceVersion, funcotatorArgs.excludedFields);
-//                break;
+                outputRenderer = new SimpleTsvOutputRenderer(funcotatorArgs.outputFile.toPath(),
+                        unaccountedForDefaultAnnotations,
+                        unaccountedForOverrideAnnotations,
+                        funcotatorArgs.referenceVersion, funcotatorArgs.excludedFields,
+                        Paths.get("org/broadinstitute/hellbender/tools/funcotator/simple_funcotator_seg_file.config"));
+                break;
             default:
                 throw new GATKException("Unsupported output format type specified: " + funcotatorArgs.outputFormatType.toString());
         }

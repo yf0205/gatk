@@ -6,6 +6,7 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.broadinstitute.hellbender.exceptions.GATKException;
+import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.funcotator.dataSources.TableFuncotation;
 import org.broadinstitute.hellbender.tools.funcotator.dataSources.gencode.GencodeFuncotation;
 import org.broadinstitute.hellbender.tools.funcotator.vcfOutput.VcfOutputRenderer;
@@ -70,19 +71,19 @@ public class FuncotationMap {
         Utils.nonNull(transcriptId);
         Utils.nonNull(fieldName);
         Utils.nonNull(allele);
-        final List<String> values = txToFuncotations.getOrDefault(transcriptId, new LinkedHashSet<>()).stream()
+        final Set<String> values = txToFuncotations.getOrDefault(transcriptId, new LinkedHashSet<>()).stream()
                 .filter(f -> f.hasField(fieldName))
                 .filter(f -> f.getAltAllele().equals(allele))
                 .map(f -> f.getField(fieldName))
-                .collect(Collectors.toList());
+                .collect(Collectors.toSet());
         if (values.size() > 1) {
-            throw new GATKException.ShouldNeverReachHereException("Found more than one value for " + transcriptId + ", "
-                    + allele + ", " + fieldName);
+            throw new UserException.BadInput("Found more than one unique value for " + transcriptId + ", "
+                    + allele + ", " + fieldName + ": " + values.stream().collect(Collectors.joining(", ")));
         }
         if (values.size() == 0) {
             return null;
         } else {
-            return values.get(0);
+            return values.iterator().next();
         }
     }
 

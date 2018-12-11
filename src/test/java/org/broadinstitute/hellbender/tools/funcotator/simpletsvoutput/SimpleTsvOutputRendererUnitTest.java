@@ -25,7 +25,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 
 public class SimpleTsvOutputRendererUnitTest extends GATKBaseTest {
-    final public String SEG_CONFIG_RESOURCE = "org/broadinstitute/hellbender/tools/funcotator/simple_oncotator_seg_file.config";
+    final public String SEG_CONFIG_RESOURCE = "org/broadinstitute/hellbender/tools/funcotator/simple_funcotator_seg_file.config";
 
     @DataProvider
     public Object[][] provideForSimpleSegFileWriting() {
@@ -44,7 +44,6 @@ public class SimpleTsvOutputRendererUnitTest extends GATKBaseTest {
         final SimpleTsvOutputRenderer renderer = new SimpleTsvOutputRenderer(outputFile.toPath(),
                 new LinkedHashMap<>(),
                 new LinkedHashMap<>(),
-                new HashSet<>(),
                 "hg19", new HashSet<>(), Paths.get(SEG_CONFIG_RESOURCE));
 
         final FuncotationMap funcotationMap = FuncotationMap.createNoTranscriptInfo(

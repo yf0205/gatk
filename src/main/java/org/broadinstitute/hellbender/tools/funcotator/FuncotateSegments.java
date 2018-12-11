@@ -2,6 +2,10 @@ package org.broadinstitute.hellbender.tools.funcotator;
 
 import htsjdk.tribble.Feature;
 import htsjdk.variant.variantcontext.VariantContext;
+import htsjdk.variant.vcf.VCFConstants;
+import htsjdk.variant.vcf.VCFHeader;
+import htsjdk.variant.vcf.VCFHeaderLineType;
+import htsjdk.variant.vcf.VCFInfoHeaderLine;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.broadinstitute.barclay.argparser.Argument;
@@ -58,6 +62,8 @@ public class FuncotateSegments extends FeatureWalker<AnnotatedInterval> {
         return true;
     }
 
+    private OutputRenderer outputRenderer;
+
     @Override
     public void onTraversalStart() {
 
@@ -92,16 +98,28 @@ public class FuncotateSegments extends FeatureWalker<AnnotatedInterval> {
                 .collect(Collectors.toList());
 
         // Initialize a funcotator engine to handle segments.
-        // TODO: Create some metadata for typical columns.
+        // TODO: Create some metadata for typical columns.  Can it *just* be END?
         funcotatorEngine = new FuncotatorEngine(funcotatorArgs,
                 getBestAvailableSequenceDictionary(),
                 VcfFuncotationMetadata.create(
-                        new ArrayList<>()
+                        Arrays.asList(
+                                new VCFInfoHeaderLine(VCFConstants.END_KEY, 1,
+                                        VCFHeaderLineType.Integer, "End coordinate of the variant")
+                        )
                 ),
                 dataSourceFuncotationFactories
         );
 
         // Create a composite output renderer.
+        // TODO: Make composite.  For now just using SimpleTsv
+        outputRenderer = funcotatorEngine.createOutputRenderer(
+                annotationDefaultsMap,
+                annotationOverridesMap,
+                new VCFHeader(),
+                getDefaultToolVCFHeaderLines(),
+                this
+        );
+
     }
 
     @Override
@@ -112,14 +130,30 @@ public class FuncotateSegments extends FeatureWalker<AnnotatedInterval> {
 
         // funcotate
         //  The resulting funcotation map should only have one transcript ID.
-        final FuncotationMap funcotationMap = funcotatorEngine.createFuncotationMapForVariant(segmentVariantContext, referenceContext, featureContext);
+        final FuncotationMap funcotationMap = funcotatorEngine.createFuncotationMapForSegment(segmentVariantContext, referenceContext, featureContext);
 
         // write the variant context
-
+        outputRenderer.write(segmentVariantContext, funcotationMap);
     }
 
     @Override
     public File getDrivingFeatureFile() {
         return segmentFile;
+    }
+
+    @Override
+    public Object onTraversalSuccess() {
+        return true;
+    }
+
+    @Override
+    public void closeTool() {
+        if ( funcotatorEngine != null) {
+            funcotatorEngine.close();
+        }
+
+        if ( outputRenderer != null ) {
+            outputRenderer.close();
+        }
     }
 }

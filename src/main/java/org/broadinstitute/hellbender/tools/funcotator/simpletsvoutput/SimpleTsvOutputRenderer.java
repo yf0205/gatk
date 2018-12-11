@@ -55,7 +55,6 @@ public class SimpleTsvOutputRenderer extends OutputRenderer {
     public SimpleTsvOutputRenderer(final Path outputFilePath,
                                    final LinkedHashMap<String, String> unaccountedForDefaultAnnotations,
                                    final LinkedHashMap<String, String> unaccountedForOverrideAnnotations,
-                                   final Set<String> toolHeaderLines,
                                    final String referenceVersion, final Set<String> excludedOutputFields,
                                    final Path configPath) {
         this.excludedOutputFields = excludedOutputFields;
@@ -85,6 +84,7 @@ public class SimpleTsvOutputRenderer extends OutputRenderer {
         } catch (final IOException ioe) {
             throw new GATKException("Could not open the simple TSV writer.", ioe);
         }
+        isWriterInitialized = true;
     }
 
     @Override
