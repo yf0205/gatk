@@ -95,7 +95,7 @@ import static org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.A
         oneLineSummary = "(Internal) Examines aligned contigs from local assemblies and calls structural variants or their breakpoints",
         summary =
         "This tool is used in development and should not be of interest to most researchers. It is a prototype of" +
-        " structural variant calling, and has been under active developments. For more stable version," +
+        " structura l variant calling, and has been under active developments. For more stable version," +
         " please see DiscoverVariantsFromContigAlignmentsSAMSpark." +
         " This tool takes a file containing the alignments of assembled contigs" +
         " (typically the output file produced by FindBreakpointEvidenceSpark) and searches for reads with" +

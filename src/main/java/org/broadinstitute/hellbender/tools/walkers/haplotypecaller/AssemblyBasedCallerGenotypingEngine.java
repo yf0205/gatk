@@ -363,13 +363,13 @@ public abstract class AssemblyBasedCallerGenotypingEngine extends GenotypingEngi
         // Otherwise (else part) we need to do it again.
         if (configuration.useFilteredReadMapForAnnotations || !configuration.isSampleContaminationPresent()) {
             readAlleleLikelihoodsForAnnotations = readAlleleLikelihoodsForGenotyping;
-            readAlleleLikelihoodsForAnnotations.filterToOnlyOverlappingReads(loc);
         } else {
-            readAlleleLikelihoodsForAnnotations = readHaplotypeLikelihoods.marginalize(alleleMapper, loc);
+            readAlleleLikelihoodsForAnnotations = readHaplotypeLikelihoods.marginalize(alleleMapper);
             if (emitReferenceConfidence) {
                 readAlleleLikelihoodsForAnnotations.addNonReferenceAllele(Allele.NON_REF_ALLELE);
             }
         }
+        readAlleleLikelihoodsForAnnotations.filterToOnlyOverlappingReads(loc);
 
         if (call.getAlleles().size() != readAlleleLikelihoodsForAnnotations.numberOfAlleles()) {
             readAlleleLikelihoodsForAnnotations.updateNonRefAlleleLikelihoods(new IndexedAlleleList<>(call.getAlleles()));
