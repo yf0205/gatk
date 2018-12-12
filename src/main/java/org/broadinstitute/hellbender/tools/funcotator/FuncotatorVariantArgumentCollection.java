@@ -26,7 +26,18 @@ public class FuncotatorVariantArgumentCollection extends BaseFuncotatorArgumentC
     )
     public boolean removeFilteredVariants = false;
 
+    @Argument(
+            fullName = FuncotatorArgumentDefinitions.FIVE_PRIME_FLANK_SIZE_NAME,
+            optional = true,
+            doc = "Variants within this many bases of the 5' end of a transcript (and not overlapping any part of the transcript itself) will be annotated as being in the 5' flanking region of that transcript"
+    )
+    public int fivePrimeFlankSize = FuncotatorArgumentDefinitions.FIVE_PRIME_FLANK_SIZE_DEFAULT_VALUE;
 
-
+    @Argument(
+            fullName = FuncotatorArgumentDefinitions.THREE_PRIME_FLANK_SIZE_NAME,
+            optional = true,
+            doc = "Variants within this many bases of the 3' end of a transcript (and not overlapping any part of the transcript itself) will be annotated as being in the 3' flanking region of that transcript"
+    )
+    public int threePrimeFlankSize = FuncotatorArgumentDefinitions.THREE_PRIME_FLANK_SIZE_DEFAULT_VALUE;
 
 }

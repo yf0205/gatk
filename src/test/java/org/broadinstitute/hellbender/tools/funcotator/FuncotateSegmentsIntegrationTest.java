@@ -56,15 +56,18 @@ public class FuncotateSegmentsIntegrationTest extends CommandLineProgramTest {
     public Object[][] cntn4GroundTruth() {
         return new Object[][] {
                 {
-                            Arrays.asList(
-                                    "CNTN4, CNTN4-AS2", "CNTN4", ""
-                            )
+                            // genes
+                            Arrays.asList("CNTN4,CNTN4-AS2", "CNTN4,CNTN4-AS1", ""),
+                            //start_gene
+                            Arrays.asList("", "CNTN4", ""),
+                            //end_gene
+                            Arrays.asList("CNTN4", "", "")
                 }
         };
     }
 
     @Test(dataProvider = "cntn4GroundTruth")
-    public void testSimpleMultipleGenesOverlap(List<String> gtGenesValues) throws IOException {
+    public void testSimpleMultipleGenesOverlap(List<String> gtGenesValues, List<String> gtStartGeneValues, List<String> gtEndGeneValues) throws IOException {
         final File outputFile = File.createTempFile("funcotatesegs_simple_cntn4", ".seg");
 
         final ArgumentsBuilder arguments = new ArgumentsBuilder();
@@ -87,5 +90,12 @@ public class FuncotateSegmentsIntegrationTest extends CommandLineProgramTest {
 
         final List<String> testGenesValues = collection.getRecords().stream().map(r -> r.getAnnotationValue("genes")).collect(Collectors.toList());
         Assert.assertEquals(testGenesValues, gtGenesValues);
+        final List<String> testStartGeneValues = collection.getRecords().stream().map(r -> r.getAnnotationValue("start_gene")).collect(Collectors.toList());
+        Assert.assertEquals(testStartGeneValues, gtStartGeneValues);
+        final List<String> testEndGeneValues = collection.getRecords().stream().map(r -> r.getAnnotationValue("end_gene")).collect(Collectors.toList());
+        Assert.assertEquals(testEndGeneValues, gtEndGeneValues);
+        // TODO: Check the other fields
     }
+
+    // TODO: hg38 test
 }

@@ -8,9 +8,9 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
-import org.broadinstitute.hellbender.tools.funcotator.dataSources.DataSourceUtils;
 import org.broadinstitute.hellbender.tools.copynumber.utils.annotatedinterval.AnnotatedInterval;
 import org.broadinstitute.hellbender.tools.copynumber.utils.annotatedinterval.AnnotatedIntervalHeader;
+import org.broadinstitute.hellbender.tools.funcotator.dataSources.DataSourceUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.codecs.xsvLocatableTable.XsvLocatableTableCodec;
@@ -52,7 +52,8 @@ public class AnnotatedIntervalCodec extends AsciiFeatureCodec<AnnotatedInterval>
         super(AnnotatedInterval.class);
         final String resourcePath = ANNOTATED_INTERVAL_DEFAULT_CONFIG_RESOURCE;
         try {
-            xsvLocatableTableCodec = new XsvLocatableTableCodec(Resource.getResourceContentsAsFile(resourcePath).toPath());
+            configFilePath = Resource.getResourceContentsAsFile(resourcePath).toPath();
+            xsvLocatableTableCodec = new XsvLocatableTableCodec(configFilePath);
         } catch (final IOException ioe) {
             throw new GATKException.ShouldNeverReachHereException("Could not read config file: " + resourcePath,
                     ioe);

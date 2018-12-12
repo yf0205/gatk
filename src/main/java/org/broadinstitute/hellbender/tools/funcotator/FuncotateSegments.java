@@ -21,6 +21,7 @@ import org.broadinstitute.hellbender.tools.copynumber.arguments.CopyNumberStanda
 import org.broadinstitute.hellbender.tools.copynumber.utils.annotatedinterval.AnnotatedInterval;
 import org.broadinstitute.hellbender.tools.funcotator.dataSources.DataSourceUtils;
 import org.broadinstitute.hellbender.tools.funcotator.metadata.VcfFuncotationMetadata;
+import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import picard.cmdline.programgroups.VariantEvaluationProgramGroup;
 
@@ -29,7 +30,6 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
-// TODO: What about using a FeatureWalker?  How much work is that?
 // TODO: Fill in the docs and do not forget Oncotator citation.
 @CommandLineProgramProperties(
         summary = " (similar functionality to Oncotator).",
@@ -92,13 +92,12 @@ public class FuncotateSegments extends FeatureWalker<AnnotatedInterval> {
                 funcotatorArgs.transcriptSelectionMode,
                 finalUserTranscriptIdSet,
                 this,
-                funcotatorArgs.lookaheadFeatureCachingInBp)
+                funcotatorArgs.lookaheadFeatureCachingInBp, new FlankSettings(0,0))
                 .stream()
                 .filter(ff -> ff.isSupportingSegmentFuncotation())
                 .collect(Collectors.toList());
 
         // Initialize a funcotator engine to handle segments.
-        // TODO: Create some metadata for typical columns.  Can it *just* be END?
         funcotatorEngine = new FuncotatorEngine(funcotatorArgs,
                 getBestAvailableSequenceDictionary(),
                 VcfFuncotationMetadata.create(
@@ -125,12 +124,17 @@ public class FuncotateSegments extends FeatureWalker<AnnotatedInterval> {
     @Override
     public void apply(final AnnotatedInterval feature, final ReadsContext readsContext, final ReferenceContext referenceContext, final FeatureContext featureContext) {
 
-        // Convert feature into a VariantContext
-        final VariantContext segmentVariantContext = AnnotatedIntervalToSegmentVariantContextConverter.convert(feature, referenceContext);
+        // Convert feature into a VariantContext while honoring the funcotation engine's necessary conversions.
+        final VariantContext segmentVariantContext = funcotatorEngine.getDefaultVariantTransformer().apply(
+                AnnotatedIntervalToSegmentVariantContextConverter.convert(feature, referenceContext));
+
+        // Get the correct reference for B37/HG19 compliance:
+        // This is necessary because of the variant transformation that gets applied in VariantWalkerBase::apply.
+        final ReferenceContext correctReferenceContext = funcotatorEngine.getCorrectReferenceContext(segmentVariantContext, referenceContext);
 
         // funcotate
-        //  The resulting funcotation map should only have one transcript ID.
-        final FuncotationMap funcotationMap = funcotatorEngine.createFuncotationMapForSegment(segmentVariantContext, referenceContext, featureContext);
+        //  The resulting funcotation map should only have one transcript ID (which is the "no transcript" ID).
+        final FuncotationMap funcotationMap = funcotatorEngine.createFuncotationMapForSegment(segmentVariantContext, correctReferenceContext, featureContext);
 
         // write the variant context
         outputRenderer.write(segmentVariantContext, funcotationMap);
@@ -154,6 +158,15 @@ public class FuncotateSegments extends FeatureWalker<AnnotatedInterval> {
 
         if ( outputRenderer != null ) {
             outputRenderer.close();
+        }
+    }
+
+    @Override
+    protected <T extends Feature> SimpleInterval makeFeatureInterval(T feature) {
+        if (funcotatorArgs.referenceVersion.equals("hg19")) {
+            return new SimpleInterval(FuncotatorUtils.convertB37ContigToHg19Contig(feature.getContig()), feature.getStart(), feature.getEnd());
+        } else {
+            return new SimpleInterval(feature);
         }
     }
 }
