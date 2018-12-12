@@ -90,7 +90,9 @@ public class SimpleTsvOutputRenderer extends OutputRenderer {
     @Override
     public void close() {
         try {
-            writer.close();
+            if (writer != null) {
+                writer.close();
+            }
         } catch (final IOException ioe) {
             throw new GATKException("Could not close the simple TSV output writing.", ioe);
         }
@@ -135,7 +137,6 @@ public class SimpleTsvOutputRenderer extends OutputRenderer {
         }
     }
 
-
     private static LinkedHashMap<String, String> createColumnNameToFieldNameMap(final LinkedHashMap<String, List<String>> columnNameToAliasMap,
                                                                             final FuncotationMap txToFuncotationMap, final String txId, final Set<String> excludedFields) {
         final LinkedHashMap<String, String> result = columnNameToAliasMap.entrySet().stream()
@@ -157,19 +158,22 @@ public class SimpleTsvOutputRenderer extends OutputRenderer {
         return result;
     }
 
-    /**    // TODO: Add unaccounted defaults and overrides.
+    /**
      * // TODO: Test override and defaults
-     * //TODO: Update parameters
      * Simple method that will produce a linked field:value hashmap using starting fields from the funcotations in a {@link FuncotationMap}
      *  and a map of funcotation field name
-     * @param columnNameToFieldMap alias map of funcotation field names to output alias.  Never {@code null}
-     * @param txToFuncotationMap
-     * @param txId
-     * @param allele
-     * @return name value pairs that have been adjusted to the output coluymn names as the field.  Never {@code null}
+     *
+     * @param columnNameToFieldMap Mapping from the output column name to the funcotation field name in the map.
+     * @param funcotationMap a funcotation map from which to extract values
+     * @param txId transcript to use
+     * @param allele alternate allele to use
+     * @param unaccountedDefaultAnnotations default values that are not already represented in the funcotation map.
+     * @param unaccountedOverrideAnnotations override values that are not already represented in the funcotation map.
+     * @param excludedFields Names of columns to exclude when creating a final map from column name to the value.
+     * @return Column names to value mapping.
      */
     private static LinkedHashMap<String, String> createColumnNameToValueMap(final LinkedHashMap<String, String> columnNameToFieldMap,
-                                                                      final FuncotationMap txToFuncotationMap, final String txId, final Allele allele,
+                                                                      final FuncotationMap funcotationMap, final String txId, final Allele allele,
                                                                             final LinkedHashMap<String, String> unaccountedDefaultAnnotations,
                                                                             final LinkedHashMap<String, String> unaccountedOverrideAnnotations, final Set<String> excludedFields) {
 
@@ -182,7 +186,7 @@ public class SimpleTsvOutputRenderer extends OutputRenderer {
         //  Note that this will overwrite the defaults specified in the default annotations.
         columnNameToFieldMap.entrySet().stream()
                 .filter(e -> !excludedFields.contains(e.getKey()))
-                .map(colEntry -> Pair.of(colEntry.getKey(), txToFuncotationMap.getFieldValue(txId, colEntry.getValue(), allele)))
+                .map(colEntry -> Pair.of(colEntry.getKey(), funcotationMap.getFieldValue(txId, colEntry.getValue(), allele)))
                 .forEach(p -> result.put(p.getLeft(), p.getRight()));
 
         // For override annotations, just put the values in regardless of what is there.
@@ -210,7 +214,12 @@ public class SimpleTsvOutputRenderer extends OutputRenderer {
         return result;
     }
 
-    //TODO: Docs
+    /**
+     * Create key value pairs where the key is the output column name and the value is a list of possible field names, in order of priority.
+     *
+     * @param resourceFile config file that encodes column_name:alias_1,alias_2 ....
+     * @return mapping of output column names to possible field names in order of priority.  Never {@code null}
+     */
     private static LinkedHashMap<String, List<String>> createColumnNameToAliasesMap(final Path resourceFile){
         final Properties configFileContents = new Properties();
         try ( final InputStream inputStream = Files.newInputStream(resourceFile, StandardOpenOption.READ) ) {
@@ -225,5 +234,4 @@ public class SimpleTsvOutputRenderer extends OutputRenderer {
                     throw new IllegalArgumentException("Should not be able to have duplicate field names."); },
                 LinkedHashMap::new ));
     }
-
 }

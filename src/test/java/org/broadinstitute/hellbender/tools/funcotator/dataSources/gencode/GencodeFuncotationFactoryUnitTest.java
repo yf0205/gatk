@@ -1492,8 +1492,6 @@ public class GencodeFuncotationFactoryUnitTest extends GATKBaseTest {
         // We know the first gene is the right one - the gene in question is the MUC16 gene:
         final GencodeGtfGeneFeature gene = (GencodeGtfGeneFeature) gtfFeatureIterator.next();
         final ReferenceContext referenceContext = new ReferenceContext(referenceDataSource, variantInterval );
-
-        // TODO: Make this an input argument:
         final Set<String> requestedTranscriptIds = getValidTranscriptsForGene(expectedGeneName);
 
         // Run this test with flanking turned on for both ends, to make sure that we don't get
