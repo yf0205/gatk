@@ -537,7 +537,7 @@ public final class GenomicsDBImport extends GATKTool {
     }
 
     private ImportConfig createImportConfig(final int batchSize) {
-        final List<SimpleInterval> spanningIntervals = IntervalUtils.getSpanningIntervals(intervals, getReferenceDictionary());
+        final List<SimpleInterval> spanningIntervals = IntervalUtils.getSpanningIntervals(intervals, getBestAvailableSequenceDictionary());
         final List<GenomicsDBImportConfiguration.Partition> partitions = generatePartitionListFromIntervals(spanningIntervals);
         GenomicsDBImportConfiguration.ImportConfiguration.Builder importConfigurationBuilder =
                 GenomicsDBImportConfiguration.ImportConfiguration.newBuilder();
