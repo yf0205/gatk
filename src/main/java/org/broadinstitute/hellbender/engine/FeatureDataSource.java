@@ -378,7 +378,7 @@ public final class FeatureDataSource<T extends Feature> implements GATKDataSourc
 
         try {
             final GenomicsDBExportConfiguration.ExportConfiguration exportConfigurationBuilder =
-                    createExportConfiguration(reference, workspace, callsetJson, vidmapJson, vcfHeader);
+                    createExportConfiguration(reference, workspace, callsetJson, vidmapJson, vcfHeader, callGenotypes);
             return new GenomicsDBFeatureReader<>(exportConfigurationBuilder, new BCF2Codec(), Optional.empty());
         } catch (final IOException e) {
             throw new UserException("Couldn't create GenomicsDBFeatureReader", e);
