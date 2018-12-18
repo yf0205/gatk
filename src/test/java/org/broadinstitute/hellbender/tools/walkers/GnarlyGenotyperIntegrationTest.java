@@ -53,6 +53,28 @@ public class GnarlyGenotyperIntegrationTest extends CommandLineProgramTest {
 
 
 
+    private static String getQueryJsonForGenomicsDB(String vidMappingFile, String callsetMappingFile, String tiledbWorkspace,
+                                                    String referenceGenome) throws IOException {
+        //Produce temporary JSON query config file
+        String indentString = "    ";
+        String queryJSON = "{\n";
+        queryJSON += indentString + "\"scan_full\": true,\n";
+        queryJSON += indentString + "\"workspace\": \""+tiledbWorkspace+"\",\n";
+        queryJSON += indentString + "\"array\": \""+GenomicsDBConstants.DEFAULT_ARRAY_NAME+"\",\n";
+        queryJSON += indentString + "\"vid_mapping_file\": \""+vidMappingFile+"\",\n";
+        queryJSON += indentString + "\"callset_mapping_file\": \""+callsetMappingFile+"\",\n";
+        queryJSON += indentString + "\"produce_GT_field\": true,\n";
+        queryJSON += indentString + "\"max_diploid_alt_alleles_that_can_be_genotyped\": 6,\n";
+        queryJSON += indentString + "\"reference_genome\": \""+referenceGenome+"\"";
+        queryJSON += "\n}\n";
+        File tmpQueryJSONFile = new File(tiledbWorkspace, "query.json");
+        tmpQueryJSONFile.deleteOnExit();
+        FileWriter fptr = new FileWriter(tmpQueryJSONFile);
+        fptr.write(queryJSON);
+        fptr.close();
+        return tmpQueryJSONFile.getAbsolutePath();
+    }
+
     @DataProvider(name="VCFdata")
     public Object[][] getVCFdata() {
         return new Object[][]{
@@ -68,8 +90,14 @@ public class GnarlyGenotyperIntegrationTest extends CommandLineProgramTest {
         final File tempGenomicsDB = GenomicsDBTestUtils.createTempGenomicsDB(Arrays.asList(inputs), new SimpleInterval(interval));
         final String genomicsDBUri = GenomicsDBTestUtils.makeGenomicsDBUri(tempGenomicsDB);
 
+        /*
         //copy in the extra files until Protobuf update in PR #4645 is ready
         Runtime.getRuntime().exec("cp " + getTestFile("vidmap.updated.json").getAbsolutePath() +" "+ tempGenomicsDB.getAbsolutePath() + "/vidmap.json");
+        getQueryJsonForGenomicsDB(new File(tempGenomicsDB, GenomicsDBConstants.DEFAULT_VIDMAP_FILE_NAME).getAbsolutePath(),
+                new File(tempGenomicsDB, GenomicsDBConstants.DEFAULT_CALLSETMAP_FILE_NAME).getAbsolutePath(),
+                tempGenomicsDB.getAbsolutePath(),
+                reference);
+                */
 
         File output = runTool(genomicsDBUri, interval, reference, additionalArguments);
 

@@ -81,7 +81,7 @@ public final class GnarlyGenotyper extends VariantWalker {
     private static final String GVCF_BLOCK = "GVCFBlock";
     private final RMSMappingQuality MQcalculator = RMSMappingQuality.getInstance();
 
-    private static final int PIPELINE_MAX_ALT_COUNT = 6;
+    public static final int PIPELINE_MAX_ALT_COUNT = 6;
     private static final int ASSUMED_PLOIDY = GATKVariantContextUtils.DEFAULT_PLOIDY;
     // cache the ploidy 2 PL array sizes for increasing numbers of alts up to the maximum of PIPELINE_MAX_ALT_COUNT
     private final int[] likelihoodSizeCache = new int[PIPELINE_MAX_ALT_COUNT + 1];
@@ -209,8 +209,7 @@ public final class GnarlyGenotyper extends VariantWalker {
         //return early if variant doesn't meet QUAL threshold
         if (!variant.hasAttribute(GATKVCFConstants.RAW_QUAL_APPROX_KEY))
             warning.warn("Variant will not be output because it is missing the " + GATKVCFConstants.RAW_QUAL_APPROX_KEY +"key assigned by the ReblockGVCFs tool -- if the input did come from ReblockGVCFs, check the GenomicsDB vidmap.json annotation info");
-        //TODO: put this back
-        final double QUALapprox = variant.getAttributeAsDouble(GATKVCFConstants.RAW_QUAL_APPROX_KEY, 50);
+        final double QUALapprox = variant.getAttributeAsDouble(GATKVCFConstants.RAW_QUAL_APPROX_KEY, 0.0);
         if(QUALapprox < genotypeArgs.STANDARD_CONFIDENCE_FOR_CALLING - 10*Math.log10(genotypeArgs.snpHeterozygosity))  //we don't apply the prior to the QUAL approx in ReblockGVCF, so do it here
             return;
 
@@ -330,12 +329,12 @@ public final class GnarlyGenotyper extends VariantWalker {
                 genotypeBuilder.alleles(GATKVariantContextUtils.noCallAlleles(ASSUMED_PLOIDY));
             }
             else if (nonRefReturned) {
-                if (g.countAllele(Allele.NON_REF_ALLELE) > 0) {
-                    genotypeBuilder.alleles(GATKVariantContextUtils.noCallAlleles(ASSUMED_PLOIDY)).noGQ().noAD();
-                }
-                else if (g.hasAD()) {
+                if (g.hasAD()) {
                     final int[] AD = trimADs(g, targetAlleles.size());
                     genotypeBuilder.AD(AD);
+                }
+                else if (g.countAllele(Allele.NON_REF_ALLELE) > 0) {
+                    genotypeBuilder.alleles(GATKVariantContextUtils.noCallAlleles(ASSUMED_PLOIDY)).noGQ();
                 }
             }
             if (g.hasPL()) {

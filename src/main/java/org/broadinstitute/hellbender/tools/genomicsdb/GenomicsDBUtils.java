@@ -92,8 +92,18 @@ public class GenomicsDBUtils {
         final HashMap<String, Integer> fieldNameToIndexInVidFieldsList =
                 getFieldNameToListIndexInProtobufVidMappingObject(vidMapPB);
 
+        //TODO: why is this returning null?
         vidMapPB = updateINFOFieldCombineOperation(vidMapPB, fieldNameToIndexInVidFieldsList,
                 GATKVCFConstants.RAW_MAPPING_QUALITY_WITH_DEPTH_KEY, "element_wise_sum");
+
+        //Update combine operations for GnarlyGenotyper
+        //Note that this MQ format is deprecated, but was used by the prototype version of ReblockGVCF
+        vidMapPB = updateINFOFieldCombineOperation(vidMapPB, fieldNameToIndexInVidFieldsList,
+                GATKVCFConstants.MAPPING_QUALITY_DEPTH, "sum");
+        vidMapPB = updateINFOFieldCombineOperation(vidMapPB, fieldNameToIndexInVidFieldsList,
+                GATKVCFConstants.RAW_QUAL_APPROX_KEY, "sum");
+        vidMapPB = updateINFOFieldCombineOperation(vidMapPB, fieldNameToIndexInVidFieldsList,
+                GATKVCFConstants.VARIANT_DEPTH_KEY, "sum");
 
 
         if (vidMapPB != null) {
@@ -153,7 +163,7 @@ public class GenomicsDBUtils {
      * @param fieldNameToIndexInVidFieldsList name to index in list
      * @param fieldName                       INFO field name
      * @param newCombineOperation             combine op ("sum", "median")
-     * @return updated vid Protobuf object if field exists, else null
+     * @return updated vid Protobuf object if field exists, else return original vidmap object
      */
     public static GenomicsDBVidMapProto.VidMappingPB updateINFOFieldCombineOperation(
             final GenomicsDBVidMapProto.VidMappingPB vidMapPB,
@@ -174,7 +184,7 @@ public class GenomicsDBUtils {
             //Rebuild full vidMap
             return updatedVidMapBuilder.build();
         }
-        return null;
+        return vidMapPB;
     }
 
 }
