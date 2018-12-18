@@ -1083,6 +1083,7 @@ public class AnalyzeMITESeq extends GATKTool {
 
     private void bumpIntervalCounter( final int start, final int end, final int readLength ) {
         if ( intervalCounter == null ) {
+            // add in an extra 50 to account for possible deletions -- not a sensitive param, just for performance
             intervalCounter = new IntervalCounter(refSeq.length, 2*readLength - flankingLength + 51);
         }
         intervalCounter.add(start, end);
@@ -1156,7 +1157,7 @@ public class AnalyzeMITESeq extends GATKTool {
         final int start2 = refCoverage2.get(0).getStart();
         final int end1 = refCoverage1.get(refCoverage1.size()-1).getEnd();
         final int end2 = refCoverage2.get(refCoverage2.size()-1).getEnd();
-        if ( Math.min(end1, end2) - Math.max(start1, start2) >= flankingLength ) {
+        if ( Math.min(end1, end2) - Math.max(start1, start2) >= 2*flankingLength+1 ) {
             bumpIntervalCounter( Math.min(start1, start2), Math.max(end1, end2), readLength);
         } else {
             bumpIntervalCounter(start1, end1, readLength);
