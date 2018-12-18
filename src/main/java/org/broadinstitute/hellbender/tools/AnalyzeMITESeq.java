@@ -1083,8 +1083,8 @@ public class AnalyzeMITESeq extends GATKTool {
 
     private void bumpIntervalCounter( final int start, final int end, final int readLength ) {
         if ( intervalCounter == null ) {
-            // add in an extra 50 to account for possible deletions -- not a sensitive param, just for performance
-            intervalCounter = new IntervalCounter(refSeq.length, 2*readLength - flankingLength + 51);
+            // add in an extra 50 bases to account for possible deletions -- not a sensitive param, just for performance
+            intervalCounter = new IntervalCounter(refSeq.length, 2*readLength - 2*flankingLength + 50);
         }
         intervalCounter.add(start, end);
     }
