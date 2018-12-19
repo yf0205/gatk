@@ -304,7 +304,7 @@ public class AnalyzeMITESeq extends GATKTool {
                     final int codonIndexEnd = refCodonValues.size();
                     String prefix = "";
                     if ( lengthDiff > 0 ) {
-                        indelCodonsBuilder.append(codonIndex).append(":--->");
+                        indelCodonsBuilder.append(codonIndex + 1).append(":--->");
                         indelAAsBuilder.append("I:->");
                         while ( lengthDiff-- > 0 && variantCodonIdx < variantIndexEnd ) {
                             final int altValue = varCodons.get(variantCodonIdx++);
@@ -314,7 +314,7 @@ public class AnalyzeMITESeq extends GATKTool {
                         }
                         prefix = ", ";
                     } else if ( lengthDiff < 0 ) {
-                        indelCodonsBuilder.append(codonIndex);
+                        indelCodonsBuilder.append(codonIndex + 1);
                         indelAAsBuilder.append("D:");
                         prefix = ":";
                         while ( lengthDiff++ < 0 && codonIndex < codonIndexEnd ) {
@@ -331,7 +331,7 @@ public class AnalyzeMITESeq extends GATKTool {
                         final int altValue = varCodons.get(variantCodonIdx++);
                         if ( refValue != altValue ) {
                             indelGroups += 1;
-                            indelCodonsBuilder.append(prefix).append(codonIndex).append(':')
+                            indelCodonsBuilder.append(prefix).append(codonIndex + 1).append(':')
                                     .append(labelForCodonValue[refValue]).append('>')
                                     .append(labelForCodonValue[altValue]);
                             final char refAA = codonTranslation.charAt(refValue);
@@ -355,7 +355,7 @@ public class AnalyzeMITESeq extends GATKTool {
         String prefix = "\t";
         for ( final Map.Entry<Integer, Integer> entry : variantCodons.entrySet() ) {
             final int codonValue = entry.getValue();
-            sb.append(prefix).append(entry.getKey()).append(':')
+            sb.append(prefix).append(entry.getKey() + 1).append(':')
                     .append(labelForCodonValue[refCodonValues.get(entry.getKey())])
                     .append('>').append(labelForCodonValue[codonValue]);
             prefix = ", ";
