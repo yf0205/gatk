@@ -288,9 +288,9 @@ public class AnalyzeMITESeq extends GATKTool {
                 indelGroups = 1;
                 if ( lengthDiff % 3 != 0 ) { // if frame-shifting indel
                     if ( lengthDiff > 0 ) {
-                        indelCodonsBuilder.append(codonIndex).append(":FSI(").append(lengthDiff).append(')');
+                        indelCodonsBuilder.append(codonIndex + 1).append(":FSI(").append(lengthDiff).append(')');
                     } else {
-                        indelCodonsBuilder.append(codonIndex).append(":FSD(").append(-lengthDiff).append(')');
+                        indelCodonsBuilder.append(codonIndex + 1).append(":FSD(").append(-lengthDiff).append(')');
                     }
                     indelAAsBuilder.append("F(").append(codonTracker.getCodonValues().size()).append("):");
                     for ( final int val : codonTracker.getCodonValues() ) {
