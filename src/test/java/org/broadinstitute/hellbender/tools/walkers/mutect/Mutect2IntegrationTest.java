@@ -20,7 +20,8 @@ import org.broadinstitute.hellbender.testutils.CommandLineProgramTester;
 import org.broadinstitute.hellbender.tools.exome.orientationbiasvariantfilter.OrientationBiasUtils;
 import org.broadinstitute.hellbender.tools.walkers.annotator.StrandBiasBySample;
 import org.broadinstitute.hellbender.tools.walkers.haplotypecaller.AssemblyBasedCallerArgumentCollection;
-import org.broadinstitute.hellbender.tools.walkers.haplotypecaller.ReadThreadingAssemblerArgumentCollection;
+import org.broadinstitute.hellbender.tools.walkers.mutect.filtering.FilterMutectCalls;
+import org.broadinstitute.hellbender.tools.walkers.mutect.filtering.M2FiltersArgumentCollection;
 import org.broadinstitute.hellbender.tools.walkers.validation.ConcordanceSummaryRecord;
 import org.broadinstitute.hellbender.tools.walkers.variantutils.ValidateVariants;
 import org.broadinstitute.hellbender.utils.IntervalUtils;
@@ -35,7 +36,6 @@ import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
-import scala.tools.nsc.transform.patmat.ScalaLogic;
 
 import java.io.File;
 import java.io.IOException;
@@ -74,6 +74,8 @@ public class Mutect2IntegrationTest extends CommandLineProgramTest {
     private static final File DREAM_3_MASK = new File(DREAM_MASKS_DIR, "mask3.list");
     private static final File DREAM_2_MASK = new File(DREAM_MASKS_DIR, "mask2.list");
     private static final File DREAM_1_MASK = new File(DREAM_MASKS_DIR, "mask1.list");
+
+    private static final File DREAM_4_FALSE_POSITIVES = new File(DREAM_VCFS_DIR, "sample_4.false_positives.vcf");
 
     private static final File NO_CONTAMINATION_TABLE = new File(toolsTestDir, "mutect/no-contamination.table");
     private static final File FIVE_PCT_CONTAMINATION_TABLE = new File(toolsTestDir, "mutect/five-pct-contamination.table");
@@ -166,6 +168,23 @@ public class Mutect2IntegrationTest extends CommandLineProgramTest {
                 }
             }
         });
+    }
+
+    @Test
+    public void testDreamFiltering() throws Exception {
+        Utils.resetRandomGenerator();
+        final File unfilteredVcf = DREAM_4_FALSE_POSITIVES;
+        final File filteredVcf = createTempFile("filtered", ".vcf");
+
+        // run FilterMutectCalls
+        new Main().instanceMain(makeCommandLineArgs(Arrays.asList("-V", unfilteredVcf.getAbsolutePath(), "-O", filteredVcf.getAbsolutePath()), FilterMutectCalls.class.getSimpleName()));
+
+        final long numTotal = VariantContextTestUtils.streamVcf(filteredVcf).count();
+
+        final long numFalsePositives = VariantContextTestUtils.streamVcf(filteredVcf)
+                .filter(vc -> vc.getFilters().isEmpty()).count();
+
+        Assert.assertTrue(numFalsePositives < 0.1 * numTotal);
     }
 
     private String getSampleName(File bam) throws IOException {
