@@ -14,6 +14,7 @@ import org.broadinstitute.barclay.argparser.CommandLineParser;
 import org.broadinstitute.hellbender.cmdline.CommandLineProgram;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.tools.genomicsdb.GenomicsDBOptions;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.config.ConfigFactory;
@@ -205,7 +206,7 @@ public final class FeatureManager implements AutoCloseable {
             // Only create a data source for Feature arguments that were actually specified
             if ( featureInput != null ) {
                 final Class<? extends Feature> featureType = getFeatureTypeForFeatureInputField(featureArgument.getKey());
-                addToFeatureSources(featureQueryLookahead, featureInput, featureType, cloudPrefetchBuffer, cloudIndexPrefetchBuffer, reference, false);
+                addToFeatureSources(featureQueryLookahead, featureInput, featureType, cloudPrefetchBuffer, cloudIndexPrefetchBuffer, new GenomicsDBOptions(reference));
             }
         }
     }
@@ -214,7 +215,7 @@ public final class FeatureManager implements AutoCloseable {
                              final Class<? extends Feature> featureType, final int cloudPrefetchBuffer,
                              final int cloudIndexPrefetchBuffer, final Path reference) {
         // Create a new FeatureDataSource for this file, and add it to our query pool
-        featureSources.put(featureInput, new FeatureDataSource<>(featureInput, featureQueryLookahead, featureType, cloudPrefetchBuffer, cloudIndexPrefetchBuffer, reference, false));
+        featureSources.put(featureInput, new FeatureDataSource<>(featureInput, featureQueryLookahead, featureType, cloudPrefetchBuffer, cloudIndexPrefetchBuffer, new GenomicsDBOptions(reference)));
     }
 
 
@@ -226,16 +227,16 @@ public final class FeatureManager implements AutoCloseable {
      * @param featureType class of features
      * @param cloudPrefetchBuffer MB size of caching/prefetching wrapper for the data, if on Google Cloud (0 to disable).
      * @param cloudIndexPrefetchBuffer MB size of caching/prefetching wrapper for the index, if on Google Cloud (0 to disable).
-     * @param doGnarlyGenotyping indicates whether the GenomicsDB export configuration should be modified for the GnarlyGenotyper
+     * @param genomicsDBOptions options and info for reading from a GenomicsDB
      *
      * Note: package-visible to enable access from the core walker classes
      * (but not actual tools, so it's not protected).
      */
     void addToFeatureSources(final int featureQueryLookahead, final FeatureInput<? extends Feature> featureInput,
                              final Class<? extends Feature> featureType, final int cloudPrefetchBuffer,
-                             final int cloudIndexPrefetchBuffer, final Path reference, final boolean doGnarlyGenotyping) {
+                             final int cloudIndexPrefetchBuffer, final GenomicsDBOptions genomicsDBOptions) {
         // Create a new FeatureDataSource for this file, and add it to our query pool
-        featureSources.put(featureInput, new FeatureDataSource<>(featureInput, featureQueryLookahead, featureType, cloudPrefetchBuffer, cloudIndexPrefetchBuffer, reference, doGnarlyGenotyping));
+        featureSources.put(featureInput, new FeatureDataSource<>(featureInput, featureQueryLookahead, featureType, cloudPrefetchBuffer, cloudIndexPrefetchBuffer, genomicsDBOptions));
     }
 
     /**

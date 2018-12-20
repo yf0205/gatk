@@ -7,6 +7,7 @@ import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.engine.filters.CountingReadFilter;
 import org.broadinstitute.hellbender.exceptions.GATKException;
+import org.broadinstitute.hellbender.tools.genomicsdb.GenomicsDBOptions;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 
 import java.util.Spliterator;
@@ -54,13 +55,14 @@ public abstract class VariantWalker extends VariantWalkerBase {
         drivingVariantsFeatureInput = new FeatureInput<>(drivingVariantFile, "drivingVariantFile");
 
         //This is the data source for the driving source of variants, which uses a cache lookahead of FEATURE_CACHE_LOOKAHEAD
+        final GenomicsDBOptions GDBoptions = new GenomicsDBOptions(referenceArguments.getReferencePath(), doGenotypeCalling());
         drivingVariants = new FeatureDataSource<>(drivingVariantsFeatureInput, FEATURE_CACHE_LOOKAHEAD, VariantContext.class, cloudPrefetchBuffer, cloudIndexPrefetchBuffer,
-                                                  referenceArguments.getReferencePath(), doGenotypeCalling());
+                                                  GDBoptions);
 
         //Add the driving datasource to the feature manager too so that it can be queried. Setting lookahead to 0 to avoid caching.
         //Note: we are disabling lookahead here because of windowed queries that need to "look behind" as well.
         features.addToFeatureSources(0, drivingVariantsFeatureInput, VariantContext.class, cloudPrefetchBuffer, cloudIndexPrefetchBuffer,
-                                     referenceArguments.getReferencePath(), doGenotypeCalling());
+                                     new GenomicsDBOptions(referenceArguments.getReferencePath(), doGenotypeCalling()));
 
         //Note: the intervals for the driving variants are set in onStartup
     }
