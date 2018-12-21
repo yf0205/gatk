@@ -26,7 +26,11 @@ import picard.cmdline.programgroups.VariantFilteringProgramGroup;
 import com.intel.gkl.IntelGKLUtils;
 
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
+import java.util.stream.Collectors;
 
 
 /**
@@ -75,11 +79,10 @@ import java.util.*;
  *   -V vcf_to_annotate.vcf.gz \
  *   -R reference.fasta \
  *   -O annotated.vcf \
- *   -architecture path/to/my_model.json \
- *   -weights path/to/my_weights.hd5
+ *   -model path/to/my_model_folder/
  * </pre>
  *
- * <h3>2D Model with user-supplied architecture and weights:</h3>
+ * <h3>2D Model with user-supplied model directory containing architecture and weights:</h3>
  *
  * <pre>
  * gatk CNNScoreVariants \
@@ -90,11 +93,9 @@ import java.util.*;
  *   -inference-batch-size 2 \
  *   -transfer-batch-size 2 \
  *   -tensor-type read-tensor \
- *   -architecture path/to/my_model.json \
- *   -weights path/to/my_weights.hd5
+ *   -model path/to/my_model_folder/
  * </pre>
  */
-@ExperimentalFeature
 @DocumentedFeature
 @CommandLineProgramProperties(
         summary = CNNScoreVariants.USAGE_SUMMARY,
@@ -128,11 +129,14 @@ public class CNNScoreVariants extends TwoPassVariantWalker {
             doc = "Output file")
     private String outputFile;
 
-    @Argument(fullName = "architecture", shortName = "architecture", doc = "Neural Net architecture configuration json file", optional = true)
-    private String architecture;
+    @Argument(fullName = "model-dir", shortName = "model", doc = "Directory containing Neural Net architecture and configuration json file", optional = true)
+    private String modelDir;
 
-    @Argument(fullName = "weights", shortName = "weights", doc = "Keras model HD5 file with neural net weights.", optional = true)
-    private String weights;
+//    @Argument(fullName = "architecture", shortName = "architecture", doc = "Neural Net architecture configuration json file", optional = true)
+//    private String architecture;
+//
+//    @Argument(fullName = "weights", shortName = "weights", doc = "Keras model HD5 file with neural net weights.", optional = true)
+//    private String weights;
 
     @Argument(fullName = "tensor-type", shortName = "tensor-type", doc = "Name of the tensors to generate, reference for 1D reference tensors and read_tensor for 2D tensors.", optional = true)
     private TensorType tensorType = TensorType.reference;
@@ -209,7 +213,7 @@ public class CNNScoreVariants extends TwoPassVariantWalker {
             return new String[]{"Inference batch size must be less than or equal to transfer batch size."};
         }
 
-        if (weights == null && architecture == null){
+        if (modelDir == null){
             if (!tensorType.equals(TensorType.read_tensor) && !tensorType.equals(TensorType.reference)){
                 return new String[]{"No default architecture for tensor type:" + tensorType.name()};
             }
@@ -486,8 +490,11 @@ public class CNNScoreVariants extends TwoPassVariantWalker {
         }
     }
 
-    private void initializePythonArgsAndModel(){
-        if (weights == null && architecture == null) {
+    private void initializePythonArgsAndModel() throws IOException {
+        String architecture;
+        String weights;
+
+        if (modelDir == null) {
             if (tensorType.equals(TensorType.read_tensor)) {
                 architecture = IOUtils.writeTempResourceFromPath(resourcePathReadTensor, null).getAbsolutePath();
                 weights = IOUtils.writeTempResourceFromPath(
@@ -500,19 +507,22 @@ public class CNNScoreVariants extends TwoPassVariantWalker {
             } else {
                 throw new GATKException("No default architecture for tensor type:" + tensorType.name());
             }
+        } else {
+            List<Path> configList = Files.list(Paths.get(modelDir)).filter(s -> s.toString().endsWith(".json")).collect(Collectors.toList());
+            List<Path> weightList = Files.list(Paths.get(modelDir)).filter(s -> s.toString().endsWith(".hd5")).collect(Collectors.toList());
+            if (configList.size() == 1 && weightList.size() == 1){
+                architecture = configList.get(0).toString();
+                weights = weightList.get(0).toString();
+            } else {
+                String errorMsg = String.format("The model directory must have 1 hd5 file and 1 json file, but %s has % hd5s and %d jsons.",
+                        modelDir, weightList.size(),  configList.size());
+                throw new UserException(errorMsg);
+            }
         }
 
-        String getArgsAndModel;
-        if (weights != null && architecture != null) {
-            getArgsAndModel = String.format("args, model = vqsr_cnn.start_session_get_args_and_model(%d, %d, '%s', weights_hd5='%s')", intraOpThreads, interOpThreads, architecture, weights) + NL;
-            logger.info("Using key:" + scoreKey + " for CNN architecture:" + architecture + " and weights:" + weights);
-        } else if (architecture == null) {
-            getArgsAndModel = String.format("args, model = vqsr_cnn.start_session_get_args_and_model(%d, %d, None, weights_hd5='%s', tensor_type='%s')", intraOpThreads, interOpThreads, weights, tensorType.name()) + NL;
-            logger.info("Using key:" + scoreKey + " for CNN weights:" + weights);
-        } else {
-            getArgsAndModel = String.format("args, model = vqsr_cnn.start_session_get_args_and_model(%d, %d, '%s')", intraOpThreads, interOpThreads, architecture) + NL;
-            logger.info("Using key:" + scoreKey + " for CNN architecture:" + architecture);
-        }
+        String getArgsAndModel = String.format("args, model = vqsr_cnn.start_session_get_args_and_model(%d, %d, '%s', weights_hd5='%s')",
+                intraOpThreads, interOpThreads, architecture, weights) + NL;
+        logger.info("Using key:" + scoreKey + " for CNN architecture:" + architecture + " and weights:" + weights);
         pythonExecutor.sendSynchronousCommand(getArgsAndModel);
     }
 }

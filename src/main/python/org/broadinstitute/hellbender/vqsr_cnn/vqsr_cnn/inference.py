@@ -3,7 +3,7 @@ import os
 import math
 import h5py
 import numpy as np
-import argparse.Namespace
+from argparse import Namespace
 from collections import namedtuple
 from typing import List, Tuple, Dict, TextIO
 
@@ -36,7 +36,7 @@ for i in range(256):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ~~~~~~~ Inference ~~~~~~~~~~~~~~~
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-def score_and_write_batch(args : argparse.Namespace,
+def score_and_write_batch(args : Namespace,
                           model : keras.Model,
                           file_out : TextIO,
                           batch_size : int,
@@ -127,7 +127,7 @@ def reference_string_to_tensor(reference : str) -> np.ndarray:
     return dna_data
 
 
-def annotation_string_to_tensor(args : argparse.Namespace, annotation_string : str) -> np.ndarray:
+def annotation_string_to_tensor(args : Namespace, annotation_string : str) -> np.ndarray:
     name_val_pairs = annotation_string.split(';')
     name_val_arrays = [p.split('=') for p in name_val_pairs]
     annotation_map = {str(p[0]).strip() : p[1] for p in name_val_arrays if len(p) > 1}
@@ -139,7 +139,7 @@ def annotation_string_to_tensor(args : argparse.Namespace, annotation_string : s
     return annotation_data
 
 
-def get_inserts(args: argparse.Namespace, read_tuples: List[Read], variant: Variant, sort_by: str='base') -> Dict:
+def get_inserts(args: Namespace, read_tuples: List[Read], variant: Variant, sort_by: str='base') -> Dict:
     '''A dictionary mapping insertions to reference positions.
 
     Ignores artificial haplotype read group.
@@ -217,7 +217,7 @@ def cigar_string_to_tuples(cigar: str) -> List[Tuple]:
     return [(defines.CIGAR2CODE[y], int(x)) for x,y in parts]
 
 
-def get_variant_window(args: argparse.Namespace, variant: Variant) -> Tuple:
+def get_variant_window(args: Namespace, variant: Variant) -> Tuple:
     index_offset = (args.window_size//2)
     reference_start = variant.pos-index_offset
     reference_end = variant.pos + index_offset + (args.window_size%2)
@@ -232,7 +232,7 @@ def clamp(n: int, minn: int, maxn: int) -> int:
     return max(min(maxn, n), minn)
 
 
-def read_tuples_to_read_tensor(args: argparse.Namespace,
+def read_tuples_to_read_tensor(args: Namespace,
                                read_tuples: List[Read],
                                ref_start: int,
                                insert_dict: Dict) -> np.ndarray:
@@ -315,7 +315,7 @@ def read_tuples_to_read_tensor(args: argparse.Namespace,
     return tensor
 
 
-def sequence_and_qualities_from_read(args: argparse.Namespace, read: Read, ref_start: int, insert_dict: Dict) -> Tuple:
+def sequence_and_qualities_from_read(args: Namespace, read: Read, ref_start: int, insert_dict: Dict) -> Tuple:
     cur_idx = 0
     my_indel_dict = {}
     no_qual_filler = 0
@@ -355,7 +355,7 @@ def sequence_and_qualities_from_read(args: argparse.Namespace, read: Read, ref_s
     return rseq, rqual
 
 
-def reference_sequence_into_tensor(args: argparse.Namespace, reference_seq: str, tensor: np.ndarray, insert_dict: Dict):
+def reference_sequence_into_tensor(args: Namespace, reference_seq: str, tensor: np.ndarray, insert_dict: Dict):
     ref_offset = len(set(args.input_symbols.values()))
 
     for i in sorted(insert_dict.keys(), key=int, reverse=True):
@@ -405,7 +405,7 @@ def base_quality_to_p_hot_array(base_quality: int, base: str, base_dict: Dict) -
     return phot
 
 
-def quality_from_mode(args: argparse.Namespace, base_quality: int, base: str, base_dict: Dict) -> np.ndarray:
+def quality_from_mode(args: Namespace, base_quality: int, base: str, base_dict: Dict) -> np.ndarray:
     if args.base_quality_mode == 'phot':
         return base_quality_to_p_hot_array(base_quality, base, base_dict)
     elif args.base_quality_mode == 'phred':
@@ -436,7 +436,7 @@ def predictions_to_snp_indel_scores(predictions: np.ndarray) -> Tuple:
     return snp_dict, indel_dict
 
 
-def _write_tensor_to_hd5(args: argparse.Namespace,
+def _write_tensor_to_hd5(args: Namespace,
                          tensor: np.ndarray,
                          annotations: np.ndarray,
                          contig: str,
