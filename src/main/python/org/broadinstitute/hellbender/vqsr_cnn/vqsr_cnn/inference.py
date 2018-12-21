@@ -3,11 +3,14 @@ import os
 import math
 import h5py
 import numpy as np
-from collections import Counter, defaultdict, namedtuple
+import argparse.Namespace
+from collections import namedtuple
+from typing import List, Tuple, Dict, TextIO
 
 from gatktool import tool
 
 # Keras Imports
+import keras
 import keras.backend as K
 
 # Package Imports
@@ -33,7 +36,12 @@ for i in range(256):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ~~~~~~~ Inference ~~~~~~~~~~~~~~~
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-def score_and_write_batch(args, model, file_out, batch_size, python_batch_size, tensor_dir):
+def score_and_write_batch(args : argparse.Namespace,
+                          model : keras.Model,
+                          file_out : TextIO,
+                          batch_size : int,
+                          python_batch_size : int,
+                          tensor_dir : str = '') -> None:
     '''Score a batch of variants with a CNN model. Write tab delimited temp file with scores.
 
     This function is tightly coupled with the CNNScoreVariants.java
@@ -42,8 +50,7 @@ def score_and_write_batch(args, model, file_out, batch_size, python_batch_size, 
     Arguments
         args: Namespace with command line or configuration file set arguments
         model: a keras model
-        file_out: The VCF file where variants scores are written
-        fifo: The fifo opened by GATK Streaming executor
+        file_out: The temporary VCF-like file where variants scores will be written
         batch_size: The total number of variants available in the fifo
         python_batch_size: the number of variants to process in each inference
         tensor_dir : If this path exists write hd5 files for each tensor (optional for debugging)
@@ -106,7 +113,7 @@ def score_and_write_batch(args, model, file_out, batch_size, python_batch_size, 
             file_out.write(variant_data[i]+'\t{0:.3f}'.format(max(snp_scores[i], indel_scores[i]))+'\n')
 
 
-def reference_string_to_tensor(reference):
+def reference_string_to_tensor(reference : str) -> np.ndarray:
     dna_data = np.zeros((len(reference), len(defines.DNA_SYMBOLS)))
     for i,b in enumerate(reference):
         if b in defines.DNA_SYMBOLS:
@@ -120,7 +127,7 @@ def reference_string_to_tensor(reference):
     return dna_data
 
 
-def annotation_string_to_tensor(args, annotation_string):
+def annotation_string_to_tensor(args : argparse.Namespace, annotation_string : str) -> np.ndarray:
     name_val_pairs = annotation_string.split(';')
     name_val_arrays = [p.split('=') for p in name_val_pairs]
     annotation_map = {str(p[0]).strip() : p[1] for p in name_val_arrays if len(p) > 1}
@@ -132,7 +139,7 @@ def annotation_string_to_tensor(args, annotation_string):
     return annotation_data
 
 
-def get_inserts(args, read_tuples, variant, sort_by='base'):
+def get_inserts(args: argparse.Namespace, read_tuples: List[Read], variant: Variant, sort_by: str='base') -> Dict:
     '''A dictionary mapping insertions to reference positions.
 
     Ignores artificial haplotype read group.
@@ -144,9 +151,10 @@ def get_inserts(args, read_tuples, variant, sort_by='base'):
     Soft Clip, S -> 4
 
     Arguments:
-        args.read_limit: maximum number of reads to return
-        samfile: the BAM (or BAMout) file
+        args: parameter namespace
+        read_tuples: list of aligned read tuples to find insertions within
         variant: the variant around which reads will load
+        sort_by: sort reads at the variant by base or refernce start
 
     Returns:
         insert_dict: a dict mapping read indices to max insertions at that point
@@ -180,7 +188,7 @@ def get_inserts(args, read_tuples, variant, sort_by='base'):
     return insert_dict
 
 
-def get_base_to_sort_by(read, variant):
+def get_base_to_sort_by(read: Read, variant: Variant) -> str:
     if len(read.seq) > 0:
         max_idx = len(read.seq)-1
     else:
@@ -201,7 +209,7 @@ def get_base_to_sort_by(read, variant):
         return 'Y'
 
 
-def cigar_string_to_tuples(cigar):
+def cigar_string_to_tuples(cigar: str) -> List[Tuple]:
     if not cigar or len(cigar) == 0:
         return []
     parts = defines.CIGAR_REGEX.findall(cigar)
@@ -209,36 +217,39 @@ def cigar_string_to_tuples(cigar):
     return [(defines.CIGAR2CODE[y], int(x)) for x,y in parts]
 
 
-def get_variant_window(args, variant):
+def get_variant_window(args: argparse.Namespace, variant: Variant) -> Tuple:
     index_offset = (args.window_size//2)
     reference_start = variant.pos-index_offset
     reference_end = variant.pos + index_offset + (args.window_size%2)
     return index_offset, reference_start, reference_end
 
 
-def bool_from_java(val):
+def bool_from_java(val: str) -> bool:
     return val == 'true'
 
 
-def clamp(n, minn, maxn):
+def clamp(n: int, minn: int, maxn: int) -> int:
     return max(min(maxn, n), minn)
 
 
-def read_tuples_to_read_tensor(args, read_tuples, ref_start, insert_dict):
-    '''Create a read tensor based on a tensor channel map.
+def read_tuples_to_read_tensor(args: argparse.Namespace,
+                               read_tuples: List[Read],
+                               ref_start: int,
+                               insert_dict: Dict) -> np.ndarray:
+    """Create a read tensor based on a tensor channel map.
 
     Assumes read pairs have the same name.
     Only loads reads that might align inside the tensor.
 
     Arguments:
-        args.read_limit: maximum number of reads to return
-        read_tuples: list of reads to make arrays from
+        args: parameter namespace
+        read_tuples: list of reads to make into a tensor
         ref_start: the beginning of the window in reference coordinates
         insert_dict: a dict mapping read indices to max insertions at that point.
 
     Returns:
         tensor: 3D read tensor.
-    '''
+    """
     channel_map = tensor_maps.get_tensor_channel_map_from_args(args)
     tensor = np.zeros(tensor_maps.tensor_shape_from_args(args))
 
@@ -304,7 +315,7 @@ def read_tuples_to_read_tensor(args, read_tuples, ref_start, insert_dict):
     return tensor
 
 
-def sequence_and_qualities_from_read(args, read, ref_start, insert_dict):
+def sequence_and_qualities_from_read(args: argparse.Namespace, read: Read, ref_start: int, insert_dict: Dict) -> Tuple:
     cur_idx = 0
     my_indel_dict = {}
     no_qual_filler = 0
@@ -344,7 +355,7 @@ def sequence_and_qualities_from_read(args, read, ref_start, insert_dict):
     return rseq, rqual
 
 
-def reference_sequence_into_tensor(args, reference_seq, tensor, insert_dict):
+def reference_sequence_into_tensor(args: argparse.Namespace, reference_seq: str, tensor: np.ndarray, insert_dict: Dict):
     ref_offset = len(set(args.input_symbols.values()))
 
     for i in sorted(insert_dict.keys(), key=int, reverse=True):
@@ -369,7 +380,7 @@ def reference_sequence_into_tensor(args, reference_seq, tensor, insert_dict):
                 tensor[ref_offset:ref_offset+4, :, i] = np.transpose(np.tile(defines.AMBIGUITY_CODES[b], (args.read_limit, 1)))
 
 
-def base_quality_to_phred_array(base_quality, base, base_dict):
+def base_quality_to_phred_array(base_quality: int, base: str, base_dict: Dict) -> np.ndarray:
     phred = np.zeros((4,))
     exponent = float(-base_quality) / 10.0
     p = 1.0-(10.0**exponent) # Convert to probability
@@ -386,7 +397,7 @@ def base_quality_to_phred_array(base_quality, base, base_dict):
     return phred
 
 
-def base_quality_to_p_hot_array(base_quality, base, base_dict):
+def base_quality_to_p_hot_array(base_quality: int, base: str, base_dict: Dict) -> np.ndarray:
     not_p = not_p_lut[base_quality]
     phot = [not_p, not_p, not_p, not_p]
     phot[base_dict[base]] = p_lut[base_quality]
@@ -394,7 +405,7 @@ def base_quality_to_p_hot_array(base_quality, base, base_dict):
     return phot
 
 
-def quality_from_mode(args, base_quality, base, base_dict):
+def quality_from_mode(args: argparse.Namespace, base_quality: int, base: str, base_dict: Dict) -> np.ndarray:
     if args.base_quality_mode == 'phot':
         return base_quality_to_p_hot_array(base_quality, base, base_dict)
     elif args.base_quality_mode == 'phred':
@@ -407,39 +418,33 @@ def quality_from_mode(args, base_quality, base, base_dict):
         raise ValueError('Unknown base quality mode:', args.base_quality_mode)
 
 
-def predictions_to_snp_scores(predictions, eps=1e-7):
+def predictions_to_snp_scores(predictions: np.ndarray, eps: float=1e-7) -> np.ndarray:
     snp = predictions[:, defines.SNP_INDEL_LABELS['SNP']]
     not_snp = predictions[:, defines.SNP_INDEL_LABELS['NOT_SNP']]
     return np.log(eps + snp / (not_snp + eps))
 
 
-def predictions_to_indel_scores(predictions, eps=1e-7):
+def predictions_to_indel_scores(predictions: np.ndarray, eps: float=1e-7) -> np.ndarray:
     indel = predictions[:, defines.SNP_INDEL_LABELS['INDEL']]
     not_indel = predictions[:, defines.SNP_INDEL_LABELS['NOT_INDEL']]
     return np.log(eps + indel / (not_indel + eps))
 
 
-def predictions_to_snp_indel_scores(predictions):
+def predictions_to_snp_indel_scores(predictions: np.ndarray) -> Tuple:
     snp_dict = predictions_to_snp_scores(predictions)
     indel_dict = predictions_to_indel_scores(predictions)
     return snp_dict, indel_dict
 
 
-def _write_tensor_to_hd5(args, tensor, annotations, contig, pos, variant_type):
+def _write_tensor_to_hd5(args: argparse.Namespace,
+                         tensor: np.ndarray,
+                         annotations: np.ndarray,
+                         contig: str,
+                         pos: str,
+                         variant_type: str) -> None:
     tensor_path = os.path.join(args.output_dir, 'inference_tensor_'+contig+pos+variant_type+defines.TENSOR_SUFFIX)
     if not os.path.exists(os.path.dirname(tensor_path)):
         os.makedirs(os.path.dirname(tensor_path))
     with h5py.File(tensor_path, 'w') as hf:
         hf.create_dataset(args.tensor_name, data=tensor, compression='gzip')
         hf.create_dataset(args.annotation_set, data=annotations, compression='gzip')
-
-def clear_session():
-    try:
-        K.clear_session()
-        K.get_session().close()
-        cfg = K.tf.ConfigProto()
-        cfg.gpu_options.allow_growth = True
-        K.set_session(K.tf.Session(config=cfg))
-    except AttributeError as e:
-        print('Could not clear session. Maybe you are using Theano backend?')
-
