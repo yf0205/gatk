@@ -457,6 +457,11 @@ public final class ReadThreadingAssembler {
         // actually build the read threading graph
         rtgraph.buildGraphIfNecessary();
 
+        // prune all of the chains where all edges have multiplicity < pruneFactor.  This must occur
+        // before recoverDanglingTails in the graph, so that we don't spend a ton of time recovering
+        // tails that we'll ultimately just trim away anyway, as the dangling tail edges have weight of 1
+        chainPruner.pruneLowWeightChains(rtgraph);
+
         // sanity check: make sure there are no cycles in the graph
         if ( rtgraph.hasCycles() ) {
             if ( debug ) {
@@ -478,11 +483,6 @@ public final class ReadThreadingAssembler {
 
     private AssemblyResult getAssemblyResult(final Haplotype refHaplotype, final int kmerSize, final ReadThreadingGraph rtgraph, final SmithWatermanAligner aligner) {
         printDebugGraphTransform(rtgraph, refHaplotype.getLocation() + "-sequenceGraph." + kmerSize + ".0.0.raw_readthreading_graph.dot");
-
-        // prune all of the chains where all edges have multiplicity < pruneFactor.  This must occur
-        // before recoverDanglingTails in the graph, so that we don't spend a ton of time recovering
-        // tails that we'll ultimately just trim away anyway, as the dangling tail edges have weight of 1
-        chainPruner.pruneLowWeightChains(rtgraph);
 
         // look at all chains in the graph that terminate in a non-ref node (dangling sources and sinks) and see if
         // we can recover them by merging some N bases from the chain back into the reference
