@@ -381,7 +381,7 @@ public final class ReadThreadingAssembler {
 
         // first, try using the requested kmer sizes
         for ( final int kmerSize : kmerSizes ) {
-            addResult(results, createGraph(reads, refHaplotype, kmerSize, givenHaplotypes, dontIncreaseKmerSizesForCycles, allowNonUniqueKmersInRef, header, aligner));
+            addResult(results, createGraph(reads, refHaplotype, kmerSize, givenHaplotypes, dontIncreaseKmerSizesForCycles, allowNonUniqueKmersInRef, false, header, aligner));
         }
 
         // if none of those worked, iterate over larger sizes if allowed to do so
@@ -391,7 +391,7 @@ public final class ReadThreadingAssembler {
             while ( results.isEmpty() && numIterations <= MAX_KMER_ITERATIONS_TO_ATTEMPT ) {
                 // on the last attempt we will allow low complexity graphs
                 final boolean lastAttempt = numIterations == MAX_KMER_ITERATIONS_TO_ATTEMPT;
-                addResult(results, createGraph(reads, refHaplotype, kmerSize, givenHaplotypes, lastAttempt, lastAttempt, header, aligner));
+                addResult(results, createGraph(reads, refHaplotype, kmerSize, givenHaplotypes, lastAttempt, lastAttempt, lastAttempt, header, aligner));
                 kmerSize += KMER_SIZE_ITERATION_INCREASE;
                 numIterations++;
             }
@@ -414,6 +414,7 @@ public final class ReadThreadingAssembler {
      * @param activeAlleleHaplotypes the GGA haplotypes to inject into the graph
      * @param allowLowComplexityGraphs if true, do not check for low-complexity graphs
      * @param allowNonUniqueKmersInRef if true, do not fail if the reference has non-unique kmers
+     * @param allowCycles  if true, allow cycles in pruned graph
      * @return sequence graph or null if one could not be created (e.g. because it contains cycles or too many paths or is low complexity)
      */
     private AssemblyResult createGraph(final Iterable<GATKRead> reads,
@@ -422,6 +423,7 @@ public final class ReadThreadingAssembler {
                                        final Iterable<Haplotype> activeAlleleHaplotypes,
                                        final boolean allowLowComplexityGraphs,
                                        final boolean allowNonUniqueKmersInRef,
+                                       final boolean allowCycles,
                                        final SAMFileHeader header,
                                        final SmithWatermanAligner aligner) {
         if ( refHaplotype.length() < kmerSize ) {
@@ -463,7 +465,7 @@ public final class ReadThreadingAssembler {
         chainPruner.pruneLowWeightChains(rtgraph);
 
         // sanity check: make sure there are no cycles in the graph
-        if ( rtgraph.hasCycles() ) {
+        if ( !allowCycles && rtgraph.hasCycles() ) {
             if ( debug ) {
                 logger.info("Not using kmer size of " + kmerSize + " in read threading assembler because it contains a cycle");
             }
