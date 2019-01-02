@@ -85,6 +85,8 @@ task MakeAlleleFrequencyOnlyGnomadVcf {
     Int machine_mem = if defined(mem_gb) then mem_gb * 1024 else default_ram_mb
     Int command_mem = machine_mem - 1024
 
+    Int runtime_cpu = select_first([cpu, 4])
+
     # ------------------------------------------------
     # Run our command:
     command {
@@ -103,10 +105,10 @@ task MakeAlleleFrequencyOnlyGnomadVcf {
         wait
 
         # Consolidate files:
-        cat header simplified_body > simplified.vcf
+        cat header simplified_body > ${output_base_name}.vcf
 
         # Zip the VCF:
-        bgzip simplified.vcf -O ${output_base_name}.vcf.gz
+        bgzip --threads ${runtime_cpu} ${output_base_name}.vcf
 
         # Index output file:
         gatk --java-options "-Xmx${command_mem}g" IndexFeatureFile -F ${output_base_name}.vcf.gz
@@ -123,7 +125,7 @@ task MakeAlleleFrequencyOnlyGnomadVcf {
         disks: "local-disk " + select_first([disk_space_gb, default_disk_space_gb]) + if use_ssd then " SSD" else " HDD"
         bootDiskSizeGb: select_first([boot_disk_size_gb, default_boot_disk_size_gb])
         preemptible: 0
-        cpu: select_first([cpu, 1])
+        cpu: runtime_cpu
     }
 
     # ------------------------------------------------
