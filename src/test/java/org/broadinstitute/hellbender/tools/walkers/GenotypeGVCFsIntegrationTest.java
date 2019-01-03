@@ -342,8 +342,8 @@ public class GenotypeGVCFsIntegrationTest extends CommandLineProgramTest {
     public void testGenotypingForSomaticGVCFs() {
         final File output = createTempFile("tmp", ".vcf");
         ArgumentsBuilder args =   new ArgumentsBuilder()
-                .addVCF(getTestFile("combined.MT.g.vcf"))
-                .addReference(MITO_REF)
+                .addVCF(new File(getToolTestDataDir() + "../CombineGVCFs/twoSamples.MT.g.vcf"))
+                .addReference(new File(b37Reference))
                 .addOutput(output)
                 .addBooleanArgument(CombineGVCFs.USE_SOMATIC_LONG_NAME, true);
         runCommandLine(args);

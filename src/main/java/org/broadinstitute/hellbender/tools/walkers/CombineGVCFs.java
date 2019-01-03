@@ -5,10 +5,7 @@ import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.samtools.util.Locatable;
 import htsjdk.variant.variantcontext.*;
 import htsjdk.variant.variantcontext.writer.VariantContextWriter;
-import htsjdk.variant.vcf.VCFConstants;
-import htsjdk.variant.vcf.VCFHeader;
-import htsjdk.variant.vcf.VCFHeaderLine;
-import htsjdk.variant.vcf.VCFStandardHeaderLines;
+import htsjdk.variant.vcf.*;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.ArgumentCollection;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
@@ -19,9 +16,7 @@ import org.broadinstitute.hellbender.cmdline.programgroups.ShortVariantDiscovery
 import org.broadinstitute.hellbender.engine.MultiVariantWalkerGroupedOnStart;
 import org.broadinstitute.hellbender.engine.ReferenceContext;
 import org.broadinstitute.hellbender.exceptions.UserException;
-import org.broadinstitute.hellbender.tools.walkers.annotator.Annotation;
-import org.broadinstitute.hellbender.tools.walkers.annotator.StandardAnnotation;
-import org.broadinstitute.hellbender.tools.walkers.annotator.VariantAnnotatorEngine;
+import org.broadinstitute.hellbender.tools.walkers.annotator.*;
 import org.broadinstitute.hellbender.utils.IntervalUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.genotyper.IndexedSampleList;
@@ -274,6 +269,13 @@ public final class CombineGVCFs extends MultiVariantWalkerGroupedOnStart {
         headerLines.add(VCFStandardHeaderLines.getInfoLine(VCFConstants.DEPTH_KEY));   // needed for gVCFs without DP tags
         if ( dbsnp.dbsnp != null  ) {
             VCFStandardHeaderLines.addStandardInfoLines(headerLines, true, VCFConstants.DBSNP_KEY);
+        }
+        if (somaticInput) {
+            headerLines.add(new VCFFormatHeaderLine(BaseQuality.KEY, VCFHeaderLineCount.R, VCFHeaderLineType.Integer, ""));
+            headerLines.add(new VCFFormatHeaderLine(MappingQuality.KEY, VCFHeaderLineCount.R, VCFHeaderLineType.Integer, ""));
+            headerLines.add(new VCFFormatHeaderLine(ReadPosition.KEY, VCFHeaderLineCount.A, VCFHeaderLineType.Integer, ""));
+            headerLines.add(new VCFFormatHeaderLine(FragmentLength.KEY, VCFHeaderLineCount.R, VCFHeaderLineType.Integer, ""));
+            headerLines.add(new VCFFormatHeaderLine("ECNT", 1, VCFHeaderLineType.Integer, ""));
         }
 
         VariantContextWriter writer = createVCFWriter(outputFile);

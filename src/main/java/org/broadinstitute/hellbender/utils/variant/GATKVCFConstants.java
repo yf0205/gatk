@@ -109,11 +109,16 @@ public final class GATKVCFConstants {
     public static final String IN_PON_VCF_ATTRIBUTE =               "PON";
     public static final String NORMAL_ARTIFACT_LOD_ATTRIBUTE =      "NALOD";
     public static final String POPULATION_AF_VCF_ATTRIBUTE =        "POPAF";
-    public static final String GERMLINE_QUAL_VCF_ATTRIBUTE =  "GERMQ";
+    public static final String GERMLINE_QUAL_VCF_ATTRIBUTE =        "GERMQ";
     public static final String REALIGNMENT_COUNTS_VCF_ATTRIBUTE =   "RCNTS";
-    public static final String CONTAMINATION_QUAL_ATTRIBUTE =  "CONTQ";
+    public static final String CONTAMINATION_QUAL_ATTRIBUTE =       "CONTQ";
     public static final List<String> STANDARD_MUTECT_INFO_FIELDS = Arrays.asList(NORMAL_LOD_KEY, TUMOR_LOD_KEY, NORMAL_ARTIFACT_LOD_ATTRIBUTE,
             EVENT_COUNT_IN_HAPLOTYPE_KEY, IN_PON_VCF_ATTRIBUTE, POPULATION_AF_VCF_ATTRIBUTE, GERMLINE_QUAL_VCF_ATTRIBUTE, CONTAMINATION_QUAL_ATTRIBUTE);
+    public static final String HAPLOTYPE_EVENT_COUNT_KEY =          "ECNT";
+    public static final String MEDIAN_BASE_QUALITY_KEY =            "MBQ";
+    public static final String MEDIAN_FRAGMENT_LENGTH =             "MFRL";
+    public static final String MEDIAN_MAPPING_QUALITY_KEY =         "MMQ";
+    public static final String MEDIAN_READ_POSITON_KEY =            "MPOS";
 
     // FORMAT keys
     public static final String ALLELE_BALANCE_KEY =                 "AB";

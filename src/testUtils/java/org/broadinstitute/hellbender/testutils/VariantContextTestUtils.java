@@ -37,6 +37,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import static org.broadinstitute.hellbender.utils.GATKProtectedVariantContextUtils.attributeToList;
+
 public final class VariantContextTestUtils {
 
     private VariantContextTestUtils() {}
@@ -275,26 +277,6 @@ public final class VariantContextTestUtils {
 
     static List<Object> remapASValues(String oldValue, List<Integer> mapping) {
         return remapListValues(Arrays.asList(oldValue.split("\\|")), mapping, 0);
-    }
-
-    //copied from htsjdk.variant.variantcontext.CommonInfo.getAttributeAsList for simplicity
-    //maybe we should expose this as a static method in htsjdk?
-    @SuppressWarnings("unchecked")
-    private static List<Object> attributeToList(final Object attribute){
-        if ( attribute == null ) return Collections.emptyList();
-        if ( attribute instanceof List) return (List<Object>)attribute;
-        if ( attribute.getClass().isArray() ) {
-            if (attribute instanceof int[]) {
-                return Arrays.stream((int[])attribute).boxed().collect(Collectors.toList());
-            } else if (attribute instanceof double[]) {
-                return Arrays.stream((double[])attribute).boxed().collect(Collectors.toList());
-            }
-            return Arrays.asList((Object[])attribute);
-        }
-        if (attribute instanceof String) {
-            return Arrays.asList(((String)attribute).split(","));
-        }
-        return Collections.singletonList(attribute);
     }
 
     public static void assertGenotypesAreEqual(final Genotype actual, final Genotype expected) {
