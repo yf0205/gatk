@@ -2,6 +2,7 @@ package org.broadinstitute.hellbender.tools.funcotator.dataSources.gencode;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
+import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.samtools.SAMSequenceRecord;
 import htsjdk.samtools.reference.ReferenceSequence;
 import htsjdk.samtools.util.Locatable;
@@ -24,10 +25,7 @@ import org.broadinstitute.hellbender.tools.funcotator.*;
 import org.broadinstitute.hellbender.tools.funcotator.dataSources.TableFuncotation;
 import org.broadinstitute.hellbender.tools.funcotator.metadata.FuncotationMetadata;
 import org.broadinstitute.hellbender.tools.funcotator.metadata.VcfFuncotationMetadata;
-import org.broadinstitute.hellbender.utils.BaseUtils;
-import org.broadinstitute.hellbender.utils.GATKProtectedVariantContextUtils;
-import org.broadinstitute.hellbender.utils.SimpleInterval;
-import org.broadinstitute.hellbender.utils.Utils;
+import org.broadinstitute.hellbender.utils.*;
 import org.broadinstitute.hellbender.utils.codecs.gencode.*;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
 import org.broadinstitute.hellbender.utils.nio.NioFileCopierWithProgressMeter;
@@ -2719,7 +2717,10 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
         Utils.validateArg(this.transcriptSelectionMode != TranscriptSelectionMode.ALL, "Cannot create funcotations on segments if the selection mode is " + TranscriptSelectionMode.ALL);
 
         final List<GencodeGtfGeneFeature> geneFeatures = gencodeGtfGeneFeaturesAsFeatures.stream().map(g -> (GencodeGtfGeneFeature) g).collect(Collectors.toList());
+        return createFuncotations(segmentVariantContext, referenceContext, geneFeatures, gencodeFuncotationComparator);
+    }
 
+    private List<Funcotation> createFuncotations(final VariantContext segmentVariantContext, final ReferenceContext referenceContext, final List<GencodeGtfGeneFeature> geneFeatures, final Comparator<GencodeFuncotation> comparator) {
         // Create a funcotation for the start position of the segment.  Using the ref allele as the ref and the alt.
         final List<GencodeGtfTranscriptFeature> allBasicOverlappingTranscripts = geneFeatures.stream().flatMap(gf -> gf.getTranscripts().stream())
                 .filter(GencodeFuncotationFactory::isBasic)
@@ -2728,44 +2729,54 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
         // Get the genes funcotation field
         final List<String> genes = retrieveGeneNamesFromTranscripts(allBasicOverlappingTranscripts).stream().sorted().collect(Collectors.toList());
 
-        //TODO: Refactor into a method and call it on start and end... i.e. reduce code duplication
-        // TODO: Extract some methods
-        final VariantContext segStartAsVariant = new VariantContextBuilder()
-                .chr(segmentVariantContext.getContig())
-                .start(segmentVariantContext.getStart())
-                .stop(segmentVariantContext.getStart())
-                .alleles(Arrays.asList(segmentVariantContext.getReference(), Allele.create("AT")))
-                .make();
-        final List<GencodeGtfTranscriptFeature> transcriptsOverlappingStart = allBasicOverlappingTranscripts.stream()
-                .filter(tx -> tx.overlaps(segStartAsVariant)).collect(Collectors.toList());
+        // Get the segment endpoints as variant contexts (assume the alternate allele is a dummy)
+        final VariantContext segStartAsVariant = createSubSegmentAsVariantContext(segmentVariantContext, segmentVariantContext.getStart(), segmentVariantContext.getStart());
+        final List<GencodeGtfTranscriptFeature> transcriptsOverlappingStart = subsetToOverlappingTranscripts(segStartAsVariant, allBasicOverlappingTranscripts);
 
-        final VariantContext segEndAsVariant = new VariantContextBuilder()
-                .chr(segmentVariantContext.getContig())
-                .start(segmentVariantContext.getEnd())
-                .stop(segmentVariantContext.getEnd())
-                // TODO: Get the end base (not that it matters much, since we are just going to do ref to ref)
-                .alleles(Arrays.asList(segmentVariantContext.getReference(), Allele.create("AT")))
-                .make();
-        final List<GencodeGtfTranscriptFeature> transcriptsOverlappingEnd = allBasicOverlappingTranscripts.stream()
-                .filter(tx -> tx.overlaps(segEndAsVariant)).collect(Collectors.toList());
+        final VariantContext segEndAsVariant = createSubSegmentAsVariantContext(segmentVariantContext, segmentVariantContext.getEnd(), segmentVariantContext.getEnd());
+        final List<GencodeGtfTranscriptFeature> transcriptsOverlappingEnd = subsetToOverlappingTranscripts(segEndAsVariant, allBasicOverlappingTranscripts);
 
-        // Create funcotations for start
+        // Create funcotations for start of segment
         final List<GencodeFuncotation> startGencodeFuncotations = createFuncotationsHelper(segStartAsVariant,
                 segStartAsVariant.getReference(),
                 referenceContext, transcriptsOverlappingStart);
-        startGencodeFuncotations.sort(gencodeFuncotationComparator);
-        // TODO: NPE possible here!
+        startGencodeFuncotations.sort(comparator);
         final GencodeFuncotation startFuncotation = startGencodeFuncotations.size() == 0 ? null: startGencodeFuncotations.get(0);
 
-        // Create funcotations for end
+        // Create funcotations for end of segment
         final List<GencodeFuncotation> endGencodeFuncotations = createFuncotationsHelper(segEndAsVariant,
                 segEndAsVariant.getReference(),
                 referenceContext, transcriptsOverlappingEnd);
-        startGencodeFuncotations.sort(gencodeFuncotationComparator);
-        // TODO: NPE possible here!
+        endGencodeFuncotations.sort(comparator);
         final GencodeFuncotation endFuncotation = endGencodeFuncotations.size() == 0 ? null: endGencodeFuncotations.get(0);
 
+        // Remember that the start funcotation could be null (or otherwise not have a transcript)
+        if (startFuncotation != null) {
+            final GencodeGtfTranscriptFeature chosenTranscriptStart = findFirstTranscriptMatch(transcriptsOverlappingStart,
+                    startGencodeFuncotations.get(0).getAnnotationTranscript());
+            final GencodeGtfFeature containingSubfeatureStart = getContainingGtfSubfeature(segStartAsVariant, chosenTranscriptStart);
+        }
+//        } else {
+//            // TODO: What here?
+//        }
+
+
         return createSegmentFuncotations(segmentVariantContext, genes, startFuncotation, endFuncotation);
+    }
+
+    private static List<GencodeGtfTranscriptFeature> subsetToOverlappingTranscripts(final VariantContext variant, final List<GencodeGtfTranscriptFeature> allBasicOverlappingTranscripts) {
+        return allBasicOverlappingTranscripts.stream()
+                .filter(tx -> tx.overlaps(variant)).collect(Collectors.toList());
+    }
+
+    private static VariantContext createSubSegmentAsVariantContext(final VariantContext segmentVariantContext, final int start, final int end) {
+        final String dummyAlt = "<REF>";
+        return new VariantContextBuilder()
+                .chr(segmentVariantContext.getContig())
+                .start(start)
+                .stop(end)
+                .alleles(Arrays.asList(segmentVariantContext.getReference(), Allele.create(dummyAlt)))
+                .make();
     }
 
     private List<Funcotation> createSegmentFuncotations(final VariantContext segmentVariantContext, final List<String> genes, final GencodeFuncotation startFuncotation, final GencodeFuncotation endFuncotation) {
@@ -2773,10 +2784,12 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
         final String genesValue = StringUtils.join(genes, ",");
         final String startGeneValue = startFuncotation == null ? "" : startFuncotation.getHugoSymbol();
         final String endGeneValue = endFuncotation == null ? "" : endFuncotation.getHugoSymbol();
+
         return segmentVariantContext.getAlternateAlleles().stream().map(a -> TableFuncotation.create(Arrays.asList(
                 getName() + "_" + getVersion() + "_genes",
                 getName() + "_" + getVersion() + "_start_gene",
                 getName() + "_" + getVersion() + "_end_gene"
+//                getName() + "_" + getVersion() + "_start_exon"
 
                 ), Arrays.asList(
                 genesValue,
@@ -2788,5 +2801,50 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
 
     private static Set<String> retrieveGeneNamesFromTranscripts(final List<GencodeGtfTranscriptFeature> txs) {
         return txs.stream().map(tx -> tx.getGeneName()).collect(Collectors.toSet());
+    }
+
+    private static GencodeGtfTranscriptFeature findFirstTranscriptMatch(final List<GencodeGtfTranscriptFeature> transcripts, final String txId) {
+        return transcripts.stream().filter(tx -> tx.getTranscriptId().equals(txId)).findFirst().orElse(null);
+    }
+
+    @VisibleForTesting
+    static int getFarthestExonInCodingDirection(final GencodeGtfTranscriptFeature transcript, final Locatable pointLocation, final SAMSequenceDictionary dictionary) {
+        final List<GencodeGtfExonFeature> exons = transcript.getExons();
+
+        Utils.validateArg(pointLocation.getEnd() == pointLocation.getStart(), "getFarthestExonInCodingDirection must have a point locatable.  In other words, start position must equal end position.");
+
+        // This index will be in order of genomic coordinates.  In other words, the strand of the transcript will be
+        //  ignored in this variable.
+        int inclusiveIndexPositiveDirection = -1;
+
+        for (int i = 0; i < exons.size(); i++) {
+            final GencodeGtfExonFeature exon = exons.get(i);
+
+            if (IntervalUtils.isBefore(pointLocation, exon.getGenomicPosition(), dictionary) ||
+                    IntervalUtils.overlaps(pointLocation, exon.getGenomicPosition())) {
+                inclusiveIndexPositiveDirection = i;
+                break;
+            }
+        }
+
+        // Just make sure that we are not before the first exon.
+        if ((inclusiveIndexPositiveDirection == 0) &&  IntervalUtils.isBefore(pointLocation, exons.get(0).getGenomicPosition(), dictionary)) {
+            inclusiveIndexPositiveDirection = -1;
+        }
+
+        if ((transcript.getGenomicStrand() == Strand.NEGATIVE) && (inclusiveIndexPositiveDirection != -1)){
+            inclusiveIndexPositiveDirection = exons.size() - inclusiveIndexPositiveDirection - 1;
+        }
+
+        return inclusiveIndexPositiveDirection;
+    }
+
+    @VisibleForTesting
+    static String determineSegmentOverlapDirection(final Strand strand, final boolean isSegmentStart) {
+        if (isSegmentStart ^ (strand == Strand.POSITIVE)) {
+            return "-";
+        } else {
+            return "+";
+        }
     }
 }
