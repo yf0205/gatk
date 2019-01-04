@@ -96,6 +96,8 @@ task MergeVcfs {
          set -e
          export GATK_LOCAL_JAR=${default="/root/gatk.jar" gatk_override}
 
+        fileListArgs=""
+
         # Ensure that the names of the files end in the correct suffixes:
         # (MergeVCFs requires compressed vcfs to end in '.vcf.gz')
         for f in ${sep=' ' input_vcfs} ; do
@@ -106,15 +108,20 @@ task MergeVcfs {
             if [ $r -eq 0 ] ; then
                 newName=$( echo $base | sed 's#.vcf.bgz$#.vcf.gz#g' )
                 mv $f ${dollar}{d}/${dollar}{newName}
+                fileListArgs="${dollar}{fileListArgs} -I ${dollar}{d}/${dollar}{newName}"
+            else
+                fileListArgs="${dollar}{fileListArgs} -I $f"
             fi
         done
+
+        echo "Using file list: ${dollar}{fileListArgs}"
 
         startTime=`date +%s.%N`
         echo "StartTime: $startTime" > ${timing_output_file}
 
          gatk --java-options "-Xmx${command_mem}m -DGATK_STACKTRACE_ON_USER_EXCEPTION=true" \
             MergeVcfs \
-             -I ${sep=' -I ' input_vcfs} \
+             ${dollar}{fileListArgs} \
              -O ${output_vcf_file}
 
         endTime=`date +%s.%N`
