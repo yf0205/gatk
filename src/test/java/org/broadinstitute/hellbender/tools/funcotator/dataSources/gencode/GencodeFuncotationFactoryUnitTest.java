@@ -18,6 +18,8 @@ import org.broadinstitute.hellbender.engine.*;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.testutils.FuncotatorReferenceTestUtils;
 import org.broadinstitute.hellbender.tools.funcotator.*;
+import org.broadinstitute.hellbender.tools.funcotator.dataSources.gencode.segment.SegmentExonOverlaps;
+import org.broadinstitute.hellbender.tools.funcotator.dataSources.gencode.segment.SegmentExonUtils;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.SimpleSVType;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.codecs.gencode.*;
@@ -2574,11 +2576,12 @@ public class GencodeFuncotationFactoryUnitTest extends GATKBaseTest {
         // 3'UTR 2200-2399
         final GencodeGtfGeneFeature geneFeaturePos = DataProviderForExampleGencodeGtfGene.dynamicallyCreateTestGencodeGtfGeneFeature("chr1",
                 1000, "TESTING", Strand.POSITIVE, 4, 200, 200, 100, 200);
+        // TODO: This is still broken for the negative strand test transcripts.
         //TODO: Check that the exon numbers are being generated properly
+        //TODO: Move to SegmentExonUtilsUnitTest
         final GencodeGtfGeneFeature geneFeatureNeg = DataProviderForExampleGencodeGtfGene.dynamicallyCreateTestGencodeGtfGeneFeature("chr1",
                 1000, "TESTING", Strand.NEGATIVE, 4, 200, 200, 100, 200);
 
-        // TODO: This is still broken for the negative strand test transcripts.
         return new Object[][]{
 
                 //  Reminder UTRs still considered part of the exon for purposes of this test.
@@ -2614,12 +2617,12 @@ public class GencodeFuncotationFactoryUnitTest extends GATKBaseTest {
 
 
                 // Segment start and end breakpoints are in the transcript (no overlap/in the intron)
-                {new SimpleInterval("chr1", 1350, 1650), geneFeaturePos, "1+", "2-"},
+                {new SimpleInterval("chr1", 1350, 1650), geneFeaturePos, "1+", "1-"},
                 {new SimpleInterval("chr1", 1350, 1650), geneFeatureNeg, "2-", "2+"},
                 {new SimpleInterval("chr1", 1650, 1950), geneFeaturePos, "2+", "2-"},
-                {new SimpleInterval("chr1", 1650, 1950), geneFeatureNeg, "3-", "3+"},
+                {new SimpleInterval("chr1", 1650, 1950), geneFeatureNeg, "1-", "1+"},
                 {new SimpleInterval("chr1", 1350, 1950), geneFeaturePos, "1+", "2-"},
-                {new SimpleInterval("chr1", 1350, 1950), geneFeatureNeg, "2-", "0+"},
+                {new SimpleInterval("chr1", 1350, 1950), geneFeatureNeg, "2-", "1+"},
 
 
                 // Segment end breakpoint is in the transcript (overlap)
@@ -2631,6 +2634,14 @@ public class GencodeFuncotationFactoryUnitTest extends GATKBaseTest {
                 {new SimpleInterval("chr1", 50, 1850), geneFeatureNeg, "", "1+"},
                 {new SimpleInterval("chr1", 50, 2150), geneFeaturePos, "", "3-"},
                 {new SimpleInterval("chr1", 50, 2150), geneFeatureNeg, "", "0+"},
+
+                // Segment end breakpoint is in the transcript (no overlap/in the intron)
+                {new SimpleInterval("chr1", 50, 1350), geneFeaturePos, "", "0-"},
+                {new SimpleInterval("chr1", 50, 1350), geneFeatureNeg, "", "3+"},
+                {new SimpleInterval("chr1", 50, 1650), geneFeaturePos, "", "1-"},
+                {new SimpleInterval("chr1", 50, 1650), geneFeatureNeg, "", "2+"},
+                {new SimpleInterval("chr1", 50, 1950), geneFeaturePos, "", "2-"},
+                {new SimpleInterval("chr1", 50, 1950), geneFeatureNeg, "", "1+"},
 
 
                 // Segment breakpoints do not overlap the transcript.
@@ -2650,20 +2661,10 @@ public class GencodeFuncotationFactoryUnitTest extends GATKBaseTest {
     @Test(dataProvider = "provideExonSegmentCalculation")
     public void testExonSegmentCalculation(final SimpleInterval segment, final GencodeGtfGeneFeature geneFeature, final String gtStart, final String gtEnd) {
 
-        final SimpleInterval segmentStart = new SimpleInterval(segment.getContig(), segment.getStart(), segment.getStart());
-        final SimpleInterval segmentEnd = new SimpleInterval(segment.getContig(), segment.getEnd(), segment.getEnd());
-
-        final int guessStart = GencodeFuncotationFactory.getFarthestExonInCodingDirection(geneFeature.getTranscripts().get(0), segmentStart,
+        final SegmentExonOverlaps guess = SegmentExonUtils.determineSegmentExonPosition(geneFeature.getTranscripts().get(0), segment,
                 refDataSourceHg38.getSequenceDictionary());
 
-        final int guessEnd = GencodeFuncotationFactory.getFarthestExonInCodingDirection(geneFeature.getTranscripts().get(0), segmentEnd,
-                refDataSourceHg38.getSequenceDictionary());
-        final Strand strand = geneFeature.getTranscripts().get(0).getGenomicStrand();
-
-        final String guessStartString = guessStart != -1 ? String.valueOf(guessStart)  + GencodeFuncotationFactory.determineSegmentOverlapDirection(strand, true) : "";
-        final String guessEndString = guessEnd != -1 ? String.valueOf(guessEnd)  + GencodeFuncotationFactory.determineSegmentOverlapDirection(strand, false) : "";
-
-        Assert.assertEquals(guessStartString, gtStart);
-        Assert.assertEquals(guessEndString, gtEnd);
+        Assert.assertEquals(guess.getSegmentStartExonOverlap(), gtStart);
+        Assert.assertEquals(guess.getSegmentEndExonOverlap(), gtEnd);
     }
 }

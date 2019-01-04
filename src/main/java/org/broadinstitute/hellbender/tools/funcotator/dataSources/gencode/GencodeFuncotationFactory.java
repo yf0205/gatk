@@ -2,7 +2,6 @@ package org.broadinstitute.hellbender.tools.funcotator.dataSources.gencode;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
-import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.samtools.SAMSequenceRecord;
 import htsjdk.samtools.reference.ReferenceSequence;
 import htsjdk.samtools.util.Locatable;
@@ -25,7 +24,10 @@ import org.broadinstitute.hellbender.tools.funcotator.*;
 import org.broadinstitute.hellbender.tools.funcotator.dataSources.TableFuncotation;
 import org.broadinstitute.hellbender.tools.funcotator.metadata.FuncotationMetadata;
 import org.broadinstitute.hellbender.tools.funcotator.metadata.VcfFuncotationMetadata;
-import org.broadinstitute.hellbender.utils.*;
+import org.broadinstitute.hellbender.utils.BaseUtils;
+import org.broadinstitute.hellbender.utils.GATKProtectedVariantContextUtils;
+import org.broadinstitute.hellbender.utils.SimpleInterval;
+import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.codecs.gencode.*;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
 import org.broadinstitute.hellbender.utils.nio.NioFileCopierWithProgressMeter;
@@ -2805,46 +2807,5 @@ public class GencodeFuncotationFactory extends DataSourceFuncotationFactory {
 
     private static GencodeGtfTranscriptFeature findFirstTranscriptMatch(final List<GencodeGtfTranscriptFeature> transcripts, final String txId) {
         return transcripts.stream().filter(tx -> tx.getTranscriptId().equals(txId)).findFirst().orElse(null);
-    }
-
-    @VisibleForTesting
-    static int getFarthestExonInCodingDirection(final GencodeGtfTranscriptFeature transcript, final Locatable pointLocation, final SAMSequenceDictionary dictionary) {
-        final List<GencodeGtfExonFeature> exons = transcript.getExons();
-
-        Utils.validateArg(pointLocation.getEnd() == pointLocation.getStart(), "getFarthestExonInCodingDirection must have a point locatable.  In other words, start position must equal end position.");
-
-        // This index will be in order of genomic coordinates.  In other words, the strand of the transcript will be
-        //  ignored in this variable.
-        int inclusiveIndexPositiveDirection = -1;
-
-        for (int i = 0; i < exons.size(); i++) {
-            final GencodeGtfExonFeature exon = exons.get(i);
-
-            if (IntervalUtils.isBefore(pointLocation, exon.getGenomicPosition(), dictionary) ||
-                    IntervalUtils.overlaps(pointLocation, exon.getGenomicPosition())) {
-                inclusiveIndexPositiveDirection = i;
-                break;
-            }
-        }
-
-        // Just make sure that we are not before the first exon.
-        if ((inclusiveIndexPositiveDirection == 0) &&  IntervalUtils.isBefore(pointLocation, exons.get(0).getGenomicPosition(), dictionary)) {
-            inclusiveIndexPositiveDirection = -1;
-        }
-
-        if ((transcript.getGenomicStrand() == Strand.NEGATIVE) && (inclusiveIndexPositiveDirection != -1)){
-            inclusiveIndexPositiveDirection = exons.size() - inclusiveIndexPositiveDirection - 1;
-        }
-
-        return inclusiveIndexPositiveDirection;
-    }
-
-    @VisibleForTesting
-    static String determineSegmentOverlapDirection(final Strand strand, final boolean isSegmentStart) {
-        if (isSegmentStart ^ (strand == Strand.POSITIVE)) {
-            return "-";
-        } else {
-            return "+";
-        }
     }
 }
