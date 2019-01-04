@@ -69,6 +69,8 @@ task MergeVcfs {
      Int? cpu
      Int? boot_disk_size_gb
 
+    String dollar = "$"
+
     # ------------------------------------------------
     # Process input args:
     String timing_output_file = basename(output_vcf_file) + ".timingInformation.txt"
@@ -93,6 +95,19 @@ task MergeVcfs {
      command <<<
          set -e
          export GATK_LOCAL_JAR=${default="/root/gatk.jar" gatk_override}
+
+        # Ensure that the names of the files end in the correct suffixes:
+        # (MergeVCFs requires compressed vcfs to end in '.vcf.gz')
+        for f in ${sep=' ' input_vcfs} ; do
+            base=$( basename $f )
+            d=$( dirname $f )
+            echo "$base" | grep -q ".vcf.bgz$"
+            r=$?
+            if [ $r -eq 0 ] ; then
+                newName=$( echo $base | sed 's#.vcf.bgz$#.vcf.gz#g' )
+                mv $f ${dollar}{d}/${dollar}{newName}
+            fi
+        done
 
         startTime=`date +%s.%N`
         echo "StartTime: $startTime" > ${timing_output_file}
