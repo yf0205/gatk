@@ -3,7 +3,6 @@ import os
 import math
 import h5py
 import numpy as np
-from argparse import Namespace
 from collections import namedtuple
 from typing import List, Tuple, Dict, TextIO
 
@@ -33,28 +32,35 @@ for i in range(256):
     p_lut[i] = 1.0 - (10.0**exponent)
     not_p_lut[i] = (1.0 - p_lut[i]) / 3.0
 
+
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ~~~~~~~ Inference ~~~~~~~~~~~~~~~
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-def score_and_write_batch(args : Namespace,
-                          model : keras.Model,
-                          file_out : TextIO,
-                          batch_size : int,
-                          python_batch_size : int,
-                          tensor_dir : str = '') -> None:
-    '''Score a batch of variants with a CNN model. Write tab delimited temp file with scores.
+def score_and_write_batch(model: keras.Model,
+                          file_out: TextIO,
+                          batch_size: int,
+                          python_batch_size: int,
+                          tensor_type: str,
+                          annotation_set: str,
+                          window_size: int,
+                          read_limit: int,
+                          tensor_dir: str = '') -> None:
+    """Score a batch of variants with a CNN model. Write tab delimited temp file with scores.
 
     This function is tightly coupled with the CNNScoreVariants.java
     It requires data written to the fifo in the order given by transferToPythonViaFifo
 
     Arguments
-        args: Namespace with command line or configuration file set arguments
         model: a keras model
         file_out: The temporary VCF-like file where variants scores will be written
         batch_size: The total number of variants available in the fifo
         python_batch_size: the number of variants to process in each inference
+        tensor_type: The name for the type of tensor to make
+        annotation_set: The name for the set of annotations to use
+        window_size: The size of the context window of genomic bases, i.e the width of the tensor
+        read_limit: The maximum number of reads to encode in a tensor, i.e. the height of the tensor
         tensor_dir : If this path exists write hd5 files for each tensor (optional for debugging)
-    '''
+    """
     annotation_batch = []
     reference_batch = []
     variant_types = []
@@ -66,40 +72,41 @@ def score_and_write_batch(args : Namespace,
 
         variant_data.append(fifo_data[0] + '\t' + fifo_data[1] + '\t' + fifo_data[2] + '\t' + fifo_data[3])
         reference_batch.append(reference_string_to_tensor(fifo_data[4]))
-        annotation_batch.append(annotation_string_to_tensor(args, fifo_data[5]))
+        annotation_batch.append(annotation_string_to_tensor(annotation_set, fifo_data[5]))
         variant_types.append(fifo_data[6].strip())
 
-        fidx = 7 # 7 Because above we parsed: contig pos ref alt reference_string annotation variant_type
-        if args.tensor_name in defines.TENSOR_MAPS_2D and len(fifo_data) > fidx:
+        fidx = 7  # 7 Because above we parsed: contig pos ref alt reference_string annotation variant_type
+        if tensor_type in defines.TENSOR_MAPS_2D and len(fifo_data) > fidx:
             read_tuples = []
             var = Variant(fifo_data[0], int(fifo_data[1]), fifo_data[2], fifo_data[3], fifo_data[6])
             while fidx+7 < len(fifo_data):
-                read_tuples.append( Read(fifo_data[fidx],
-                                         list(map(int, fifo_data[fidx+1].split(','))),
-                                         fifo_data[fidx+2],
-                                         bool_from_java(fifo_data[fidx+3]),
-                                         bool_from_java(fifo_data[fidx+4]),
-                                         bool_from_java(fifo_data[fidx+5]),
-                                         int(fifo_data[fidx+6]),
-                                         int(fifo_data[fidx+7])))
+                read_tuples.append(Read(fifo_data[fidx],
+                                        list(map(int, fifo_data[fidx+1].split(','))),
+                                        fifo_data[fidx+2],
+                                        bool_from_java(fifo_data[fidx+3]),
+                                        bool_from_java(fifo_data[fidx+4]),
+                                        bool_from_java(fifo_data[fidx+5]),
+                                        int(fifo_data[fidx+6]),
+                                        int(fifo_data[fidx+7])))
                 fidx += READ_ELEMENTS
-            _, ref_start, _ = get_variant_window(args, var)
-            insert_dict = get_inserts(args, read_tuples, var)
-            tensor = read_tuples_to_read_tensor(args, read_tuples, ref_start, insert_dict)
-            reference_sequence_into_tensor(args, fifo_data[4], tensor, insert_dict)
+            _, ref_start, _ = get_variant_window(window_size, var)
+            insert_dict = get_inserts(read_tuples, var, window_size)
+            tensor = read_tuples_to_tensor(read_tuples, ref_start, insert_dict, tensor_type, window_size, read_limit)
+            reference_sequence_into_tensor(fifo_data[4], tensor, insert_dict, window_size, read_limit)
             if os.path.exists(tensor_dir):
-                _write_tensor_to_hd5(args, tensor, annotation_batch[-1], fifo_data[0], fifo_data[1], fifo_data[6])
+                _write_tensor_to_hd5(tensor, annotation_batch[-1], fifo_data[0], fifo_data[1], fifo_data[6],
+                                     tensor_type, annotation_set, tensor_dir)
             read_batch.append(tensor)
 
-    if args.tensor_name in defines.TENSOR_MAPS_1D:
+    if tensor_type in defines.TENSOR_MAPS_1D:
         predictions = model.predict([np.array(reference_batch), np.array(annotation_batch)],
                                     batch_size=python_batch_size)
-    elif args.tensor_name in defines.TENSOR_MAPS_2D:
+    elif tensor_type in defines.TENSOR_MAPS_2D:
         predictions = model.predict(
-            {args.tensor_name:np.array(read_batch), args.annotation_set:np.array(annotation_batch)},
+            {tensor_type: np.array(read_batch), annotation_set: np.array(annotation_batch)},
             batch_size=python_batch_size)
     else:
-        raise ValueError('Unknown tensor mapping.  Check architecture file.', args.tensor_name)
+        raise ValueError('Unknown tensor mapping.  Check architecture file.', tensor_type)
 
     indel_scores = predictions_to_indel_scores(predictions)
     snp_scores = predictions_to_snp_scores(predictions)
@@ -113,7 +120,7 @@ def score_and_write_batch(args : Namespace,
             file_out.write(variant_data[i]+'\t{0:.3f}'.format(max(snp_scores[i], indel_scores[i]))+'\n')
 
 
-def reference_string_to_tensor(reference : str) -> np.ndarray:
+def reference_string_to_tensor(reference: str) -> np.ndarray:
     dna_data = np.zeros((len(reference), len(defines.DNA_SYMBOLS)))
     for i,b in enumerate(reference):
         if b in defines.DNA_SYMBOLS:
@@ -127,20 +134,20 @@ def reference_string_to_tensor(reference : str) -> np.ndarray:
     return dna_data
 
 
-def annotation_string_to_tensor(args : Namespace, annotation_string : str) -> np.ndarray:
+def annotation_string_to_tensor(annotation_set: str, annotation_string: str) -> np.ndarray:
     name_val_pairs = annotation_string.split(';')
     name_val_arrays = [p.split('=') for p in name_val_pairs]
-    annotation_map = {str(p[0]).strip() : p[1] for p in name_val_arrays if len(p) > 1}
-    annotation_data = np.zeros(( len(defines.ANNOTATIONS[args.annotation_set]),))
-    for i,a in enumerate(defines.ANNOTATIONS[args.annotation_set]):
+    annotation_map = {str(p[0]).strip(): p[1] for p in name_val_arrays if len(p) > 1}
+    annotation_data = np.zeros((len(defines.ANNOTATIONS[annotation_set]),))
+    for ii, a in enumerate(defines.ANNOTATIONS[annotation_set]):
         if a in annotation_map and not math.isnan(float(annotation_map[a])):
-            annotation_data[i] = annotation_map[a]
+            annotation_data[ii] = annotation_map[a]
 
     return annotation_data
 
 
-def get_inserts(args: Namespace, read_tuples: List[Read], variant: Variant, sort_by: str='base') -> Dict:
-    '''A dictionary mapping insertions to reference positions.
+def get_inserts(read_tuples: List[Read], variant: Variant, window_size: int, sort_by: str='base') -> Dict:
+    """A dictionary mapping insertions to reference positions.
 
     Ignores artificial haplotype read group.
     Relies on pysam's cigartuples structure see: http://pysam.readthedocs.io/en/latest/api.html
@@ -151,21 +158,21 @@ def get_inserts(args: Namespace, read_tuples: List[Read], variant: Variant, sort
     Soft Clip, S -> 4
 
     Arguments:
-        args: parameter namespace
         read_tuples: list of aligned read tuples to find insertions within
         variant: the variant around which reads will load
+        window_size: The size of the context window of genomic bases, i.e the width of the tensor
         sort_by: sort reads at the variant by base or refernce start
 
     Returns:
         insert_dict: a dict mapping read indices to max insertions at that point
-    '''
+    """
     insert_dict = {}
 
-    idx_offset, ref_start, ref_end = get_variant_window(args, variant)
+    idx_offset, ref_start, ref_end = get_variant_window(window_size, variant)
 
     for read in read_tuples:
         index_dif = ref_start - read.reference_start
-        if abs(index_dif) >= args.window_size:
+        if abs(index_dif) >= window_size:
             continue
 
         if 'I' in read.cigar:
@@ -181,9 +188,9 @@ def get_inserts(args: Namespace, read_tuples: List[Read], variant: Variant, sort
                 if t[0] in CIGAR_CODES_TO_COUNT:
                     cur_idx += t[1]
 
-    read_tuples.sort(key=lambda read: read.reference_start)
+    read_tuples.sort(key=lambda r: r.reference_start)
     if sort_by == 'base':
-        read_tuples.sort(key=lambda read: get_base_to_sort_by(read, variant))
+        read_tuples.sort(key=lambda r: get_base_to_sort_by(r, variant))
 
     return insert_dict
 
@@ -217,10 +224,10 @@ def cigar_string_to_tuples(cigar: str) -> List[Tuple]:
     return [(defines.CIGAR2CODE[y], int(x)) for x,y in parts]
 
 
-def get_variant_window(args: Namespace, variant: Variant) -> Tuple:
-    index_offset = (args.window_size//2)
+def get_variant_window(window_size: int, variant: Variant) -> Tuple:
+    index_offset = (window_size//2)
     reference_start = variant.pos-index_offset
-    reference_end = variant.pos + index_offset + (args.window_size%2)
+    reference_end = variant.pos + index_offset + (window_size % 2)
     return index_offset, reference_start, reference_end
 
 
@@ -232,39 +239,45 @@ def clamp(n: int, minn: int, maxn: int) -> int:
     return max(min(maxn, n), minn)
 
 
-def read_tuples_to_read_tensor(args: Namespace,
-                               read_tuples: List[Read],
+def read_tuples_to_tensor(read_tuples: List[Read],
                                ref_start: int,
-                               insert_dict: Dict) -> np.ndarray:
+                               insert_dict: Dict,
+                               tensor_type: str,
+                               window_size: int,
+                               read_limit: int,
+                               base_quality_mode: str='phot') -> np.ndarray:
     """Create a read tensor based on a tensor channel map.
 
     Assumes read pairs have the same name.
     Only loads reads that might align inside the tensor.
 
     Arguments:
-        args: parameter namespace
         read_tuples: list of reads to make into a tensor
         ref_start: the beginning of the window in reference coordinates
         insert_dict: a dict mapping read indices to max insertions at that point.
+        tensor_type: The name for the type of tensor to make
+        window_size: The size of the context window of genomic bases, i.e the width of the tensor
+        read_limit: The maximum number of reads to encode in a tensor, i.e. the height of the tensor
+        base_quality_mode: How to encode qualities in the tensor (phot, 1hot or phred)
 
     Returns:
         tensor: 3D read tensor.
     """
-    channel_map = tensor_maps.get_tensor_channel_map_from_args(args)
-    tensor = np.zeros(tensor_maps.tensor_shape_from_args(args))
+    channel_map = tensor_maps.get_tensor_channel_map_from_tensor_type(tensor_type)
+    tensor = np.zeros(tensor_maps.tensor_shape_from_tensor_type(tensor_type, window_size, read_limit))
 
-    if len(read_tuples) > args.read_limit:
-        read_tuples_idx = np.random.choice(range(len(read_tuples)), size=args.read_limit, replace=False)
-        read_tuples = [read_tuples[i] for i in read_tuples_idx]
+    if len(read_tuples) > read_limit:
+        read_tuples_idx = np.random.choice(range(len(read_tuples)), size=read_limit, replace=False)
+        read_tuples = [read_tuples[ii] for ii in read_tuples_idx]
 
-    for j,read in enumerate(read_tuples):
-        rseq, rqual = sequence_and_qualities_from_read(args, read, ref_start, insert_dict)
+    for j, read in enumerate(read_tuples):
+        rseq, rqual = sequence_and_qualities_from_read(read, ref_start, insert_dict, window_size)
         flag_start = -1
         flag_end = 0
 
         for i,b in enumerate(rseq):
 
-            if i == args.window_size:
+            if i == window_size:
                 break
 
             if b == defines.SKIP_CHAR:
@@ -274,14 +287,14 @@ def read_tuples_to_read_tensor(args: Namespace,
             else:
                 flag_end = i
 
-            if b in args.input_symbols:
+            if b in defines.INPUTS_INDEL:
                 if b == defines.INDEL_CHAR:
                     if K.image_data_format() == 'channels_last':
-                        tensor[j, i, args.input_symbols[b]] = 1.0
+                        tensor[j, i, defines.INPUTS_INDEL[b]] = 1.0
                     else:
-                        tensor[args.input_symbols[b], j, i] = 1.0
+                        tensor[defines.INPUTS_INDEL[b], j, i] = 1.0
                 else:
-                    hot_array = quality_from_mode(args, rqual[i], b, args.input_symbols)
+                    hot_array = quality_from_mode(rqual[i], b, defines.INPUTS_INDEL, base_quality_mode)
                     if K.image_data_format() == 'channels_last':
                         tensor[j, i, :4] = hot_array
                     else:
@@ -315,7 +328,7 @@ def read_tuples_to_read_tensor(args: Namespace,
     return tensor
 
 
-def sequence_and_qualities_from_read(args: Namespace, read: Read, ref_start: int, insert_dict: Dict) -> Tuple:
+def sequence_and_qualities_from_read(read: Read, ref_start: int, insert_dict: Dict, window_size: int) -> Tuple:
     cur_idx = 0
     my_indel_dict = {}
     no_qual_filler = 0
@@ -334,8 +347,8 @@ def sequence_and_qualities_from_read(args: Namespace, read: Read, ref_start: int
         if k not in my_indel_dict:
             my_indel_dict[k] = insert_dict[k]
 
-    rseq = read.seq[:args.window_size]
-    rqual = read.qual[:args.window_size]
+    rseq = read.seq[:window_size]
+    rqual = read.qual[:window_size]
 
     if index_dif > 0:
         rseq = rseq[index_dif:]
@@ -355,37 +368,42 @@ def sequence_and_qualities_from_read(args: Namespace, read: Read, ref_start: int
     return rseq, rqual
 
 
-def reference_sequence_into_tensor(args: Namespace, reference_seq: str, tensor: np.ndarray, insert_dict: Dict):
-    ref_offset = len(set(args.input_symbols.values()))
+def reference_sequence_into_tensor(reference_seq: str,
+                                   tensor: np.ndarray,
+                                   insert_dict: Dict,
+                                   window_size: int,
+                                   read_limit: int):
+    ref_offset = len(defines.INPUTS_INDEL)
 
-    for i in sorted(insert_dict.keys(), key=int, reverse=True):
-        if i < 0:
-            reference_seq = defines.INDEL_CHAR*insert_dict[i] + reference_seq
+    for ii in sorted(insert_dict.keys(), key=int, reverse=True):
+        if ii < 0:
+            reference_seq = defines.INDEL_CHAR*insert_dict[ii] + reference_seq
         else:
-            reference_seq = reference_seq[:i] + defines.INDEL_CHAR*insert_dict[i] + reference_seq[i:]
+            reference_seq = reference_seq[:ii] + defines.INDEL_CHAR*insert_dict[ii] + reference_seq[ii:]
 
-    for i,b in enumerate(reference_seq):
-        if i == args.window_size:
+    for ii,b in enumerate(reference_seq):
+        if ii == window_size:
             break
 
-        if b in args.input_symbols:
-            if args.channels_last:
-                tensor[:, i, ref_offset+args.input_symbols[b]] = 1.0
+        if b in defines.INPUTS_INDEL:
+            if K.image_data_format() == 'channels_last':
+                tensor[:, ii, ref_offset+defines.INPUTS_INDEL[b]] = 1.0
             else:
-                tensor[ref_offset+args.input_symbols[b], :, i] = 1.0
+                tensor[ref_offset+defines.INPUTS_INDEL[b], :, ii] = 1.0
         elif b in defines.AMBIGUITY_CODES:
-            if args.channels_last:
-                tensor[:, i, ref_offset:ref_offset+4] = np.tile(defines.AMBIGUITY_CODES[b], (args.read_limit, 1))
+            if K.image_data_format() == 'channels_last':
+                tensor[:, ii, ref_offset:ref_offset+4] = np.tile(defines.AMBIGUITY_CODES[b], (read_limit, 1))
             else:
-                tensor[ref_offset:ref_offset+4, :, i] = np.transpose(np.tile(defines.AMBIGUITY_CODES[b], (args.read_limit, 1)))
+                tensor[ref_offset:ref_offset+4, :, ii] = np.transpose(
+                    np.tile(defines.AMBIGUITY_CODES[b], (read_limit, 1)))
 
 
 def base_quality_to_phred_array(base_quality: int, base: str, base_dict: Dict) -> np.ndarray:
     phred = np.zeros((4,))
     exponent = float(-base_quality) / 10.0
-    p = 1.0-(10.0**exponent) # Convert to probability
-    not_p = (1.0-p) / 3.0 # Error could be any of the other 3 bases
-    not_base_quality = -10 * np.log10(not_p) # Back to Phred
+    p = 1.0-(10.0**exponent)  # Convert to probability
+    not_p = (1.0-p) / 3.0  # Error could be any of the other 3 bases
+    not_base_quality = -10 * np.log10(not_p)  # Back to Phred
 
     for b in base_dict.keys():
         if b == defines.INDEL_CHAR:
@@ -405,17 +423,17 @@ def base_quality_to_p_hot_array(base_quality: int, base: str, base_dict: Dict) -
     return phot
 
 
-def quality_from_mode(args: Namespace, base_quality: int, base: str, base_dict: Dict) -> np.ndarray:
-    if args.base_quality_mode == 'phot':
+def quality_from_mode(base_quality: int, base: str, base_dict: Dict, base_quality_mode: str) -> np.ndarray:
+    if base_quality_mode == 'phot':
         return base_quality_to_p_hot_array(base_quality, base, base_dict)
-    elif args.base_quality_mode == 'phred':
+    elif base_quality_mode == 'phred':
         return base_quality_to_phred_array(base_quality, base, base_dict)
-    elif args.base_quality_mode == '1hot':
+    elif base_quality_mode == '1hot':
         one_hot = np.zeros((4,))
         one_hot[base_dict[base]] = 1.0
         return one_hot
     else:
-        raise ValueError('Unknown base quality mode:', args.base_quality_mode)
+        raise ValueError('Unknown base quality mode:', base_quality_mode)
 
 
 def predictions_to_snp_scores(predictions: np.ndarray, eps: float=1e-7) -> np.ndarray:
@@ -436,15 +454,17 @@ def predictions_to_snp_indel_scores(predictions: np.ndarray) -> Tuple:
     return snp_dict, indel_dict
 
 
-def _write_tensor_to_hd5(args: Namespace,
-                         tensor: np.ndarray,
+def _write_tensor_to_hd5(tensor: np.ndarray,
                          annotations: np.ndarray,
                          contig: str,
                          pos: str,
-                         variant_type: str) -> None:
-    tensor_path = os.path.join(args.output_dir, 'inference_tensor_'+contig+pos+variant_type+defines.TENSOR_SUFFIX)
+                         variant_type: str,
+                         tensor_type: str,
+                         annotation_set: str,
+                         output_dir: str,) -> None:
+    tensor_path = os.path.join(output_dir, 'inference_tensor_'+contig+pos+variant_type+defines.TENSOR_SUFFIX)
     if not os.path.exists(os.path.dirname(tensor_path)):
         os.makedirs(os.path.dirname(tensor_path))
     with h5py.File(tensor_path, 'w') as hf:
-        hf.create_dataset(args.tensor_name, data=tensor, compression='gzip')
-        hf.create_dataset(args.annotation_set, data=annotations, compression='gzip')
+        hf.create_dataset(tensor_type, data=tensor, compression='gzip')
+        hf.create_dataset(annotation_set, data=annotations, compression='gzip')

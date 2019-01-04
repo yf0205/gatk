@@ -17,12 +17,13 @@ public class CNNScoreVariantsIntegrationTest extends CommandLineProgramTest {
     private static final String modelDir1D = largeFileTestDir + "VQSR/cnn_ref_model/";
     private static final String modelDir2D = largeFileTestDir + "VQSR/cnn_read_model/";
     private static final String inputVCF = largeFileTestDir + "VQSR/recalibrated_chr20_start.vcf";
+    private static final String inputBAM = largeFileTestDir + "VQSR/g94982_contig_20_start_bamout.bam";
 
     /**
      * Run the tool on a small test VCF.
      */
     @Test(groups = {"python"})
-    public void testInference() throws IOException{
+    public void testInference() throws IOException {
         final boolean newExpectations = false;
         final ArgumentsBuilder argsBuilder = new ArgumentsBuilder();
         argsBuilder.addArgument(StandardArgumentDefinitions.VARIANT_LONG_NAME, inputVCF)
@@ -42,7 +43,7 @@ public class CNNScoreVariantsIntegrationTest extends CommandLineProgramTest {
     }
 
     @Test(groups = {"python"})
-    public void testInferenceWithWeightOverride() throws IOException{
+    public void testInferenceWithWeightOverride() throws IOException {
         final ArgumentsBuilder argsBuilder = new ArgumentsBuilder();
         argsBuilder.addArgument(StandardArgumentDefinitions.VARIANT_LONG_NAME, inputVCF)
                 .addArgument(StandardArgumentDefinitions.OUTPUT_LONG_NAME, "%s")
@@ -56,7 +57,7 @@ public class CNNScoreVariantsIntegrationTest extends CommandLineProgramTest {
     }
 
     @Test(groups = {"python"}, enabled = true)
-    public void testInferenceResourceModel() throws IOException{
+    public void testInferenceResourceModel() throws IOException {
         final ArgumentsBuilder argsBuilder = new ArgumentsBuilder();
         argsBuilder.addArgument(StandardArgumentDefinitions.VARIANT_LONG_NAME, inputVCF)
                 .addArgument(StandardArgumentDefinitions.OUTPUT_LONG_NAME, "%s")
@@ -69,7 +70,7 @@ public class CNNScoreVariantsIntegrationTest extends CommandLineProgramTest {
     }
 
     @Test(groups = {"python"})
-    public void testSmallBatchInference()throws IOException {
+    public void testSmallBatchInference() throws IOException {
         final ArgumentsBuilder argsBuilder = new ArgumentsBuilder();
         argsBuilder.addArgument(StandardArgumentDefinitions.VARIANT_LONG_NAME, inputVCF)
                 .addArgument(StandardArgumentDefinitions.OUTPUT_LONG_NAME, "%s")
@@ -85,7 +86,7 @@ public class CNNScoreVariantsIntegrationTest extends CommandLineProgramTest {
     }
 
     @Test(groups = {"python"})
-    public void testOnContigEdge() throws IOException{
+    public void testOnContigEdge() {
         final String edgeVcf = toolsTestDir + "walkers/VQSR/variantNearContigEdge.vcf";
         final ArgumentsBuilder argsBuilder = new ArgumentsBuilder();
         argsBuilder.addArgument(StandardArgumentDefinitions.VARIANT_LONG_NAME, edgeVcf)
@@ -101,16 +102,16 @@ public class CNNScoreVariantsIntegrationTest extends CommandLineProgramTest {
      * Run the 2D Model on a small test VCF.
      */
     @Test(groups = {"python"})
-    public void testInference2d() throws IOException{
+    public void testInference2d() throws IOException {
         final boolean newExpectations = false;
         TensorType tt = TensorType.read_tensor;
         final ArgumentsBuilder argsBuilder = new ArgumentsBuilder();
         argsBuilder.addArgument(StandardArgumentDefinitions.VARIANT_LONG_NAME, inputVCF)
-                .addArgument(StandardArgumentDefinitions.INPUT_LONG_NAME, largeFileTestDir + "VQSR/g94982_chr20_1m_10m_bamout.bam")
+                .addArgument(StandardArgumentDefinitions.INPUT_LONG_NAME, inputBAM)
                 .addArgument(StandardArgumentDefinitions.REFERENCE_LONG_NAME, b37_reference_20_21)
                 .addArgument("model-dir", modelDir2D)
-                .addArgument("inference-batch-size", "1")
-                .addArgument("transfer-batch-size", "1")
+                .addArgument("inference-batch-size", "4")
+                .addArgument("transfer-batch-size", "4")
                 .addArgument("tensor-type", tt.name())
                 .addArgument(StandardArgumentDefinitions.ADD_OUTPUT_VCF_COMMANDLINE, "false");
 
@@ -129,16 +130,16 @@ public class CNNScoreVariantsIntegrationTest extends CommandLineProgramTest {
     /**
      * Run the 2D Model on a small test VCF with the resource loaded architecture.
      */
-    @Test(groups = {"python"}, enabled = true)
-    public void testInference2dResourceModel() throws IOException{
+    @Test(groups = {"python"})
+    public void testInference2dResourceModel() throws IOException {
         TensorType tt = TensorType.read_tensor;
         final ArgumentsBuilder argsBuilder = new ArgumentsBuilder();
         argsBuilder.addArgument(StandardArgumentDefinitions.VARIANT_LONG_NAME, inputVCF)
-                .addArgument(StandardArgumentDefinitions.INPUT_LONG_NAME, largeFileTestDir + "VQSR/g94982_chr20_1m_10m_bamout.bam")
+                .addArgument(StandardArgumentDefinitions.INPUT_LONG_NAME, inputBAM)
                 .addArgument(StandardArgumentDefinitions.OUTPUT_LONG_NAME, "%s")
                 .addArgument(StandardArgumentDefinitions.REFERENCE_LONG_NAME, b37_reference_20_21)
-                .addArgument("inference-batch-size", "1")
-                .addArgument("transfer-batch-size", "1")
+                .addArgument("inference-batch-size", "2")
+                .addArgument("transfer-batch-size", "2")
                 .addArgument("tensor-type", tt.name())
                 .addArgument(StandardArgumentDefinitions.ADD_OUTPUT_VCF_COMMANDLINE, "false");
 

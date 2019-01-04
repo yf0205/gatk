@@ -1,37 +1,39 @@
 package org.broadinstitute.hellbender.tools.walkers.vqsr;
 
+import java.util.*;
+import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.Files;
+import java.io.IOException;
+import java.util.stream.Collectors;
+import java.io.UnsupportedEncodingException;
+
+import htsjdk.variant.vcf.VCFHeader;
+import htsjdk.variant.vcf.VCFHeaderLine;
 import htsjdk.variant.variantcontext.VariantContext;
 import htsjdk.variant.variantcontext.VariantContextBuilder;
 import htsjdk.variant.variantcontext.writer.VariantContextWriter;
-import htsjdk.variant.vcf.VCFHeader;
-import htsjdk.variant.vcf.VCFHeaderLine;
 
-import org.broadinstitute.barclay.argparser.*;
-import org.broadinstitute.barclay.help.DocumentedFeature;
-import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.engine.*;
+import org.broadinstitute.barclay.argparser.*;
 import org.broadinstitute.hellbender.engine.filters.*;
-import org.broadinstitute.hellbender.exceptions.GATKException;
-import org.broadinstitute.hellbender.utils.haplotype.HaplotypeBAMWriter;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
 import org.broadinstitute.hellbender.utils.io.Resource;
-import org.broadinstitute.hellbender.utils.python.StreamingPythonScriptExecutor;
+import org.broadinstitute.barclay.help.DocumentedFeature;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
-import org.broadinstitute.hellbender.utils.runtime.AsynchronousStreamWriter;
+import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFHeaderLines;
-import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.utils.haplotype.HaplotypeBAMWriter;
+import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
+import org.broadinstitute.hellbender.utils.runtime.AsynchronousStreamWriter;
+import org.broadinstitute.hellbender.utils.python.StreamingPythonScriptExecutor;
+
 import picard.cmdline.programgroups.VariantFilteringProgramGroup;
 
 import com.intel.gkl.IntelGKLUtils;
-
-import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.*;
-import java.util.stream.Collectors;
-
 
 /**
  * Annotate a VCF with scores from a Convolutional Neural Network (CNN).
@@ -117,6 +119,8 @@ public class CNNScoreVariants extends TwoPassVariantWalker {
             " If you have an older (pre-1.6) version of TensorFlow installed that does not require AVX you may attempt to re-run the tool with the %s argument to bypass this check.\n" +
             " Note that such configurations are not officially supported.";
 
+    private static final String DEFAULT_ANNOTATION_SET = "best_practices";
+
     private static final int CONTIG_INDEX = 0;
     private static final int POS_INDEX = 1;
     private static final int REF_INDEX = 2;
@@ -132,17 +136,17 @@ public class CNNScoreVariants extends TwoPassVariantWalker {
     @Argument(fullName = "model-dir", shortName = "model", doc = "Directory containing Neural Net architecture and configuration json file", optional = true)
     private String modelDir;
 
-//    @Argument(fullName = "architecture", shortName = "architecture", doc = "Neural Net architecture configuration json file", optional = true)
-//    private String architecture;
-//
-//    @Argument(fullName = "weights", shortName = "weights", doc = "Keras model HD5 file with neural net weights.", optional = true)
-//    private String weights;
-
     @Argument(fullName = "tensor-type", shortName = "tensor-type", doc = "Name of the tensors to generate, reference for 1D reference tensors and read_tensor for 2D tensors.", optional = true)
     private TensorType tensorType = TensorType.reference;
 
+    @Argument(fullName = "annotation-set", shortName = "annotation-set", doc = "Name of the set of annotations to use", optional = true)
+    private String annotationSet = DEFAULT_ANNOTATION_SET;
+
     @Argument(fullName = "window-size", shortName = "window-size", doc = "Neural Net input window size", minValue = 0, optional = true)
     private int windowSize = 128;
+
+    @Argument(fullName = "read-limit", shortName = "read-limit", doc = "Maximum number of reads to encode in a tensor, for 2D models only.", minValue = 0, optional = true)
+    private int readLimit = 128;
 
     @Argument(fullName = "filter-symbolic-and-sv", shortName = "filter-symbolic-and-sv", doc = "If set will filter symbolic and and structural variants from the input VCF", optional = true)
     private boolean filterSymbolicAndSV = false;
@@ -456,9 +460,13 @@ public class CNNScoreVariants extends TwoPassVariantWalker {
 
     private void executePythonCommand() {
         final String pythonCommand = String.format(
-                "vqsr_cnn.score_and_write_batch(args, model, tempFile, %d, %d, '%s')",
+                "vqsr_cnn.score_and_write_batch(model, tempFile, %d, %d, '%s', '%s', %d, %d, '%s')",
                 curBatchSize,
                 inferenceBatchSize,
+                tensorType,
+                annotationSet,
+                windowSize,
+                readLimit,
                 outputTensorsDir) + NL;
         pythonExecutor.startBatchWrite(pythonCommand, batchList);
     }
@@ -469,7 +477,6 @@ public class CNNScoreVariants extends TwoPassVariantWalker {
         final Set<VCFHeaderLine> inputHeaders = inputHeader.getMetaDataInSortedOrder();
         final Set<VCFHeaderLine> hInfo = new HashSet<>(inputHeaders);
         hInfo.add(GATKVCFHeaderLines.getInfoLine(scoreKey));
-        VariantRecalibrationUtils.addVQSRStandardHeaderLines(hInfo);
         final TreeSet<String> samples = new TreeSet<>();
         samples.addAll(inputHeader.getGenotypeSamples());
         hInfo.addAll(getDefaultToolVCFHeaderLines());
