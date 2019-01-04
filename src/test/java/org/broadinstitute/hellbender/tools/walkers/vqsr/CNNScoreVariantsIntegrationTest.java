@@ -17,7 +17,9 @@ public class CNNScoreVariantsIntegrationTest extends CommandLineProgramTest {
     private static final String modelDir1D = largeFileTestDir + "VQSR/cnn_ref_model/";
     private static final String modelDir2D = largeFileTestDir + "VQSR/cnn_read_model/";
     private static final String inputVCF = largeFileTestDir + "VQSR/recalibrated_chr20_start.vcf";
+    private static final String bigInputVCF = largeFileTestDir + "VQSR/g94982_20_1m_10m_python_2dcnn.vcf.gz";
     private static final String inputBAM = largeFileTestDir + "VQSR/g94982_contig_20_start_bamout.bam";
+    private static final String inputIntervals = largeFileTestDir + "VQSR/contig20_conf_1m_10m.interval_list";
 
     /**
      * Run the tool on a small test VCF.
@@ -43,6 +45,26 @@ public class CNNScoreVariantsIntegrationTest extends CommandLineProgramTest {
     }
 
     @Test(groups = {"python"})
+    public void testInferenceWithIntervals() throws IOException {
+        final boolean newExpectations = true;
+        final ArgumentsBuilder argsBuilder = new ArgumentsBuilder();
+        argsBuilder.addArgument(StandardArgumentDefinitions.VARIANT_LONG_NAME, bigInputVCF)
+                .addArgument(StandardArgumentDefinitions.REFERENCE_LONG_NAME, b37_reference_20_21)
+                .addArgument(StandardArgumentDefinitions.INTERVALS_LONG_NAME, inputIntervals)
+                .addArgument(StandardArgumentDefinitions.ADD_OUTPUT_VCF_COMMANDLINE, "false");
+
+        if (newExpectations) {
+            argsBuilder.addArgument(StandardArgumentDefinitions.OUTPUT_LONG_NAME, largeFileTestDir + "VQSR/expected/cnn_1d_contig20_1m_10m_expected.vcf");
+            runCommandLine(argsBuilder);
+        } else {
+            argsBuilder.addArgument(StandardArgumentDefinitions.OUTPUT_LONG_NAME, "%s");
+            final IntegrationTestSpec spec = new IntegrationTestSpec(argsBuilder.toString(),
+                    Arrays.asList(largeFileTestDir + "VQSR/expected/cnn_1d_contig20_1m_10m_expected.vcf"));
+            spec.executeTest("testInference", this);
+        }
+    }
+
+    @Test(groups = {"python"})
     public void testInferenceWithWeightOverride() throws IOException {
         final ArgumentsBuilder argsBuilder = new ArgumentsBuilder();
         argsBuilder.addArgument(StandardArgumentDefinitions.VARIANT_LONG_NAME, inputVCF)
@@ -56,7 +78,7 @@ public class CNNScoreVariantsIntegrationTest extends CommandLineProgramTest {
         spec.executeTest("testInference", this);
     }
 
-    @Test(groups = {"python"}, enabled = true)
+    @Test(groups = {"python"})
     public void testInferenceResourceModel() throws IOException {
         final ArgumentsBuilder argsBuilder = new ArgumentsBuilder();
         argsBuilder.addArgument(StandardArgumentDefinitions.VARIANT_LONG_NAME, inputVCF)

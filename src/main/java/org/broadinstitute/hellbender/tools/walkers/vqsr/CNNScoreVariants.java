@@ -262,6 +262,11 @@ public class CNNScoreVariants extends TwoPassVariantWalker {
             }
         }
 
+        final VCFHeader inputHeader = getHeaderForVariants();
+        if(inputHeader.getGenotypeSamples().size() > 1) {
+            logger.warn("CNNScoreVariants is a single sample tool but the input VCF has more than 1 sample.");
+        }
+
         // Start the Python process and initialize a stream writer for streaming data to the Python code
         pythonExecutor.start(Collections.emptyList(), enableJournal, pythonProfileResults);
         pythonExecutor.initStreamWriter(AsynchronousStreamWriter.stringSerializer);
