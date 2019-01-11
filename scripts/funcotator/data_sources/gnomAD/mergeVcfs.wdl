@@ -6,7 +6,6 @@
 #     gatk_docker                    -  GATK Docker image in which to run
 #     variant_vcfs                   -  Array of Variant Context Files (VCF) containing the variants.
 #     output_vcf_file_name           -  Desired name of the resulting VCF output file.
-#     output_vcf_index_name          -  Desired name of the resulting VCF index output file.
 #
 #   Optional:
 #     File gatk4_jar_override        -  Override Jar file containing GATK 4.  Use this when overriding the docker JAR or when using a backend without docker.
