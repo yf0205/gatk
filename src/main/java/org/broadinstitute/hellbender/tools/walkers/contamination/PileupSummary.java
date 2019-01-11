@@ -98,6 +98,37 @@ public class PileupSummary implements Locatable {
         }
     }
 
+    // Takes a list of PileupSummaryTable files and write them all in one output file in order
+    public static void writeToFile(final List<File> inputFiles, final File output) {
+        boolean headerWritten = false;
+        String sample = "";
+        try ( PileupSummaryTableWriter writer = new PileupSummaryTableWriter(output) ) {
+            for (final File inputFile : inputFiles){
+                try ( PileupSummaryTableReader reader = new PileupSummaryTableReader(inputFile)){
+                    if (! headerWritten){
+                        sample = reader.getMetadata().get(TableUtils.SAMPLE_METADATA_TAG);
+                        writer.writeMetadata(TableUtils.SAMPLE_METADATA_TAG, sample);
+                        headerWritten = true;
+                    }
+
+                    final String thisSample = reader.getMetadata().get(TableUtils.SAMPLE_METADATA_TAG);
+                    if (! thisSample.equals(sample)){
+                        throw new UserException(String.format("Combining PileupSummaryTables from different samples is not supported. Got samples %s and %s",
+                                sample, thisSample));
+                    }
+
+                    final List<PileupSummary> pileupSummaries = reader.toList();
+                    writer.writeAllRecords(pileupSummaries);
+                } catch (IOException e){
+                    throw new UserException(String.format("Encountered an IO exception while reading from %s.", inputFile));
+                }
+            }
+
+        } catch (IOException e){
+            throw new UserException(String.format("Encountered an IO exception while writing to %s.", output));
+        }
+    }
+
     public static ImmutablePair<String, List<PileupSummary>> readFromFile(final File tableFile) {
         try( PileupSummaryTableReader reader = new PileupSummaryTableReader(tableFile) ) {
             final List<PileupSummary> pileupSummaries = reader.toList();
