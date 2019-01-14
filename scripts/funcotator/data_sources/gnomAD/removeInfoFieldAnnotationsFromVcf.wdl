@@ -6,6 +6,7 @@
 #     String gatk_docker                                -  GATK Docker image in which to run
 #
 #     Array[File] variant_vcfs                          -  Array of Variant Context Files (VCFs) from which to remove INFO field annotations.
+#                                                          Assumes that index files are in the same folder as VCF files and of the correct extension.
 #     Array[String] info_annotations_to_remove          -  Array of strings with each being the name of an annotation to remove from the INFO field.
 #
 #   Optional:
@@ -24,7 +25,6 @@ workflow RemoveInfoFieldAnnotationsFromVcf {
     String gatk_docker
 
     Array[File] variant_vcfs
-    Array[File] variant_vcf_index_files
     Array[String] info_annotations_to_remove
 
     File? gatk4_jar_override
@@ -36,10 +36,13 @@ workflow RemoveInfoFieldAnnotationsFromVcf {
 
     # Run liftover on each input VCF:
 #    scatter ( vcf in variant_vcfs ) {
-    scatter ( vcf_file_index_pair in [variant_vcfs, variant_vcf_index_files] ) {
+    scatter ( vcf_file in variant_vcfs ) {
 
-      File vcf       = vcf_file_index_pair[0]
-      File vcf_index = vcf_file_index_pair[1]
+      File vcf       = vcf_file[0]
+
+      # Get the name of this run's index file:
+      String index_format = if sub(vcf, ".*\\.", "") == "vcf" then "idx" else "tbi"
+      File vcf_index = vcf + "." + index_format
 
       # Get the name of this run's VCF file:
       String vcf_extension = sub(vcf, "^.*.vcf", ".vcf" )
