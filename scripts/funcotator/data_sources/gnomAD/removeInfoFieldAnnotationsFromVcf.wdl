@@ -35,7 +35,6 @@ workflow RemoveInfoFieldAnnotationsFromVcf {
     Int?  boot_disk_size_gb
 
     # Run liftover on each input VCF:
-#    scatter ( vcf in variant_vcfs ) {
     scatter ( vcf_file in variant_vcfs ) {
 
       # Get the name of this run's index file:
@@ -111,6 +110,9 @@ task SelectVariantsTask {
      command <<<
          set -e
          export GATK_LOCAL_JAR=${default="/root/gatk.jar" gatk_override}
+
+        echo "Disk Space:"
+        df -h
 
         startTime=`date +%s.%N`
         echo "StartTime: $startTime" > ${timing_output_file}
