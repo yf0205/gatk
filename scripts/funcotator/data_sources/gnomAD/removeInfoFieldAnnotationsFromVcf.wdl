@@ -38,20 +38,18 @@ workflow RemoveInfoFieldAnnotationsFromVcf {
 #    scatter ( vcf in variant_vcfs ) {
     scatter ( vcf_file in variant_vcfs ) {
 
-      File vcf       = vcf_file[0]
-
       # Get the name of this run's index file:
-      String index_format = if sub(vcf, ".*\\.", "") == "vcf" then "idx" else "tbi"
-      File vcf_index = vcf + "." + index_format
+      String index_format = if sub(vcf_file, ".*\\.", "") == "vcf" then "idx" else "tbi"
+      File vcf_index = vcf_file + "." + index_format
 
       # Get the name of this run's VCF file:
-      String vcf_extension = sub(vcf, "^.*.vcf", ".vcf" )
-      String vcf_base_name = basename( vcf, vcf_extension )
+      String vcf_extension = sub(vcf_file, "^.*.vcf", ".vcf" )
+      String vcf_base_name = basename( vcf_file, vcf_extension )
       String output_vcf_file = vcf_base_name + ".INFO_ANNOTATIONS_FIXED" + vcf_extension
 
       call SelectVariantsTask {
           input:
-              input_vcf_file                              = vcf,
+              input_vcf_file                              = vcf_file,
               input_vcf_file_index                        = vcf_index,
               output_vcf_file                             = output_vcf_file,
               info_annotations_to_remove                  = info_annotations_to_remove,
