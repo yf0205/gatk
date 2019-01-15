@@ -6,7 +6,7 @@ import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.hellbender.cmdline.CommandLineProgram;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
-import org.broadinstitute.hellbender.engine.ReferenceFileSource;
+import org.broadinstitute.hellbender.utils.reference.ReferenceUtils;
 import picard.cmdline.programgroups.DiagnosticsAndQCProgramGroup;
 
 import java.io.File;
@@ -22,9 +22,8 @@ import java.util.stream.Collectors;
 )
 
 public class GatherPileupSummaries extends CommandLineProgram {
-    // TODO: is it wasteful to ask for a full reference when dictionary will do?
-    @Argument(fullName = StandardArgumentDefinitions.REFERENCE_SHORT_NAME, doc = "reference file")
-    final File reference = null;
+    @Argument(fullName = StandardArgumentDefinitions.SEQUENCE_DICTIONARY_NAME, doc = "sequence dictionary file")
+    final File sequenceDictionaryFile = null;
 
     @Argument(fullName = StandardArgumentDefinitions.INPUT_SHORT_NAME, doc = "an output of PileupSummaryTable")
     final List<File> input = null;
@@ -36,7 +35,7 @@ public class GatherPileupSummaries extends CommandLineProgram {
 
     @Override
     protected void onStartup(){
-        sequenceDictionary = new ReferenceFileSource(reference.toPath()).getSequenceDictionary();
+        sequenceDictionary = ReferenceUtils.loadFastaDictionary(sequenceDictionaryFile);
     }
 
     @Override

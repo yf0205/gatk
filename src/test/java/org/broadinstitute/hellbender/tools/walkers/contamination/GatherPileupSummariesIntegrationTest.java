@@ -63,7 +63,7 @@ public class GatherPileupSummariesIntegrationTest extends CommandLineProgramTest
         final File combinedPileupSummary = createTempFile("combined", "tsv");
         final File[] files = directory.toFile().listFiles();
         final ArgumentsBuilder args = new ArgumentsBuilder();
-        args.addArgument(StandardArgumentDefinitions.REFERENCE_SHORT_NAME, b37Reference);
+        args.addArgument(StandardArgumentDefinitions.SEQUENCE_DICTIONARY_NAME, FULL_HG19_DICT);
         args.addArgument(StandardArgumentDefinitions.OUTPUT_SHORT_NAME, combinedPileupSummary.getAbsolutePath());
         Arrays.stream(files).forEach(f -> {
             args.addArgument(StandardArgumentDefinitions.INPUT_SHORT_NAME, f.getAbsolutePath());
@@ -108,7 +108,7 @@ public class GatherPileupSummariesIntegrationTest extends CommandLineProgramTest
         final File combinedPileupSummary = createTempFile("combined", "tsv");
         final File[] pileupSummaries = pileupSummaryDir.listFiles();
         final ArgumentsBuilder args = new ArgumentsBuilder();
-        args.addArgument(StandardArgumentDefinitions.REFERENCE_SHORT_NAME, b37_reference_20_21);
+        args.addArgument(StandardArgumentDefinitions.SEQUENCE_DICTIONARY_NAME, FULL_HG19_DICT);
         args.addArgument(StandardArgumentDefinitions.OUTPUT_SHORT_NAME, combinedPileupSummary.getAbsolutePath());
         Arrays.stream(pileupSummaries).forEach(f ->
                 args.addArgument(StandardArgumentDefinitions.INPUT_SHORT_NAME, f.getAbsolutePath()));
