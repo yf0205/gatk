@@ -2577,8 +2577,8 @@ public class GencodeFuncotationFactoryUnitTest extends GATKBaseTest {
         final GencodeGtfGeneFeature geneFeaturePos = DataProviderForExampleGencodeGtfGene.dynamicallyCreateTestGencodeGtfGeneFeature("chr1",
                 1000, "TESTING", Strand.POSITIVE, 4, 200, 200, 100, 200);
         // TODO: This is still broken for the negative strand test transcripts.
-        //TODO: Check that the exon numbers are being generated properly
-        //TODO: Move to SegmentExonUtilsUnitTest
+        // TODO: Check that the exon numbers are being generated properly
+        // TODO: Move to SegmentExonUtilsUnitTest
         final GencodeGtfGeneFeature geneFeatureNeg = DataProviderForExampleGencodeGtfGene.dynamicallyCreateTestGencodeGtfGeneFeature("chr1",
                 1000, "TESTING", Strand.NEGATIVE, 4, 200, 200, 100, 200);
 

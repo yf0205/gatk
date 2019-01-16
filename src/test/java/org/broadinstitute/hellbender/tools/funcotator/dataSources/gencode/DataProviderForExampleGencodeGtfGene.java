@@ -5,6 +5,7 @@ import org.broadinstitute.hellbender.tools.funcotator.FuncotatorTestConstants;
 import org.broadinstitute.hellbender.utils.codecs.gencode.*;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -443,7 +444,10 @@ public class DataProviderForExampleGencodeGtfGene {
         //   UTRs are the last features, so feature order num should be the last listed.
 
         // Exons (incl. start codon and CDS)
+        final List<GencodeGtfExonFeature> tmpExons = new ArrayList<>();
         for (int i = 0; i < numExons; i++) {
+
+            // Must calculate the start position going in the reverse direction for negative strand transcripts
             final int exonStart = start + length5Utr + (i * lengthExons) + (i * lengthIntrons);
             // TODO: Do we need to check strand here and reverse the numbering?
             final int exonNum = i + 1;
@@ -454,7 +458,7 @@ public class DataProviderForExampleGencodeGtfGene {
                 final GencodeGtfExonFeature startCodonExon = createStartCodonExon(start, contig, lengthExons,
                         featureOrderNum, geneName, exonNum, length5Utr, codingDirection);
 
-                transcript1.addExon(startCodonExon);
+                tmpExons.add(startCodonExon);
             }
 
             // Last exon.  Needs CDS (exon), stop codon (exon), and 3' UTR
@@ -462,20 +466,28 @@ public class DataProviderForExampleGencodeGtfGene {
                 final GencodeGtfExonFeature stopCodonExon = createStopCodonExon(exonStart, contig, lengthExons,
                         featureOrderNum, geneName, exonNum, length3Utr, codingDirection);
 
-                transcript1.addExon(stopCodonExon);
+                tmpExons.add(stopCodonExon);
             } else {
 
                 // Middle exon... just needs CDS
-                transcript1.addExon(createMiddleExon(exonStart, contig, lengthExons, featureOrderNum, geneName, exonNum, codingDirection));
+                tmpExons.add(createMiddleExon(exonStart, contig, lengthExons, featureOrderNum, geneName, exonNum, codingDirection));
             }
         }
 
-        // create the 5' UTR attached to the front of the first exon
-        final List<GencodeGtfExonFeature> allExons = transcript1.getExons();
-        final GencodeGtfUTRFeature fivePUtr = create5pUtr(featureOrderNum, contig, length5Utr, geneName, allExons.get(0),
+        // create UTR code handles the reverse/forward strand logic
+        final GencodeGtfUTRFeature fivePUtr = create5pUtr(featureOrderNum, contig, length5Utr, geneName, tmpExons.get(0),
                 codingDirection);
         final GencodeGtfUTRFeature threePUtr = create3pUtr(featureOrderNum, contig, length3Utr, geneName,
-                allExons.get(allExons.size()-1), codingDirection);
+                tmpExons.get(tmpExons.size()-1), codingDirection);
+
+        if (codingDirection == Strand.NEGATIVE) {
+            // TODO: Reverse the locations of the start and end codons
+
+        }
+
+        tmpExons.forEach(transcript1::addExon);
+
+        // create the 5' UTR attached to the front of the first exon
         transcript1.addUtr(fivePUtr);
         transcript1.addUtr(threePUtr);
         gene.setUcscGenomeVersion(FuncotatorTestConstants.REFERENCE_VERSION_HG38);
@@ -487,6 +499,8 @@ public class DataProviderForExampleGencodeGtfGene {
                                                              final AtomicInteger featureOrderNum, final String geneName,
                                                              final int exonNum, final int length3pUtr, final Strand codingDirection) {
 
+        final int CODON_LENGTH = 3;
+
         // Exon is created with room
         final GencodeGtfFeatureBaseData data = new GencodeGtfFeatureBaseData(featureOrderNum.getAndIncrement(), contig, GencodeGtfFeature.AnnotationSource.ENSEMBL, GencodeGtfFeature.FeatureType.EXON,
                 exonStart, exonStart + lengthExons + length3pUtr - 1, codingDirection, GencodeGtfFeature.GenomicPhase.DOT, "TEST_GENE1", "TEST_TRANSCRIPT1", GencodeGtfFeature.GeneTranscriptType.PROTEIN_CODING,
@@ -496,16 +510,22 @@ public class DataProviderForExampleGencodeGtfGene {
         );
         final GencodeGtfExonFeature exon = (GencodeGtfExonFeature) GencodeGtfFeature.create(data);
 
+        final int cdsStart = codingDirection == Strand.POSITIVE ?  exon.getGenomicStartLocation() : exon.getGenomicStartLocation() + length3pUtr + CODON_LENGTH - 1;
+        final int cdsEnd = codingDirection == Strand.POSITIVE ?  exon.getGenomicEndLocation() - length3pUtr - CODON_LENGTH : exon.getGenomicEndLocation();
+
         final GencodeGtfFeatureBaseData tmpCdsMinusStop = new GencodeGtfFeatureBaseData(featureOrderNum.getAndIncrement(), contig, GencodeGtfFeature.AnnotationSource.ENSEMBL, GencodeGtfFeature.FeatureType.CDS,
-                exon.getGenomicStartLocation(), exon.getGenomicEndLocation() - length3pUtr - 3, codingDirection, GencodeGtfFeature.GenomicPhase.DOT, "TEST_GENE1", "TEST_TRANSCRIPT1", GencodeGtfFeature.GeneTranscriptType.PROTEIN_CODING,
+                cdsStart, cdsEnd, codingDirection, GencodeGtfFeature.GenomicPhase.DOT, "TEST_GENE1", "TEST_TRANSCRIPT1", GencodeGtfFeature.GeneTranscriptType.PROTEIN_CODING,
                 null, geneName, GencodeGtfFeature.GeneTranscriptType.PROTEIN_CODING, null, "TEST_TRANSCRIPT1", exon.getExonNumber(), exon.getExonId(), GencodeGtfFeature.LocusLevel.AUTOMATICALLY_ANNOTATED,
                 Collections.emptyList(),
                 null
         );
         final GencodeGtfCDSFeature cds1 = (GencodeGtfCDSFeature) GencodeGtfFeature.create(tmpCdsMinusStop);
 
+        final int stopCodonStart = codingDirection == Strand.POSITIVE ? cds1.getGenomicEndLocation() + 1 : ; //TODO: Not zero
+        final int stopCodonEnd = codingDirection == Strand.POSITIVE ? cds1.getGenomicEndLocation() + CODON_LENGTH : 0; //TODO: Not zero
+
         final GencodeGtfFeatureBaseData tmpStopCodon = new GencodeGtfFeatureBaseData(featureOrderNum.getAndIncrement(), contig, GencodeGtfFeature.AnnotationSource.ENSEMBL, GencodeGtfFeature.FeatureType.STOP_CODON,
-                cds1.getGenomicEndLocation() + 1, cds1.getGenomicEndLocation() + 3, codingDirection, GencodeGtfFeature.GenomicPhase.DOT, "TEST_GENE1", "TEST_TRANSCRIPT1", GencodeGtfFeature.GeneTranscriptType.PROTEIN_CODING,
+                stopCodonStart, stopCodonEnd, codingDirection, GencodeGtfFeature.GenomicPhase.DOT, "TEST_GENE1", "TEST_TRANSCRIPT1", GencodeGtfFeature.GeneTranscriptType.PROTEIN_CODING,
                 null, geneName, GencodeGtfFeature.GeneTranscriptType.PROTEIN_CODING, null, "TEST_TRANSCRIPT1", exon.getExonNumber(), exon.getExonId(), GencodeGtfFeature.LocusLevel.AUTOMATICALLY_ANNOTATED,
                 Collections.emptyList(),
                 null
@@ -521,8 +541,10 @@ public class DataProviderForExampleGencodeGtfGene {
     private static GencodeGtfUTRFeature create3pUtr(final AtomicInteger featureOrderNum, final String contig,
                                                     final int length3Utr, final String geneName,
                                                     final GencodeGtfExonFeature exon, final Strand codingDirection) {
+        final int start = codingDirection == Strand.FORWARD ? exon.getGenomicEndLocation() - length3Utr + 1 : exon.getGenomicStartLocation();
+        final int end = codingDirection == Strand.FORWARD ? exon.getGenomicEndLocation() : exon.getGenomicStartLocation() + length3Utr - 1;
         final GencodeGtfFeatureBaseData tmp3pUtr = new GencodeGtfFeatureBaseData(featureOrderNum.getAndIncrement(), contig, GencodeGtfFeature.AnnotationSource.ENSEMBL, GencodeGtfFeature.FeatureType.UTR,
-                exon.getGenomicEndLocation() - length3Utr + 1, exon.getGenomicEndLocation(), codingDirection, GencodeGtfFeature.GenomicPhase.DOT, "TEST_GENE1", "TEST_TRANSCRIPT1", GencodeGtfFeature.GeneTranscriptType.PROTEIN_CODING,
+                start, end, codingDirection, GencodeGtfFeature.GenomicPhase.DOT, "TEST_GENE1", "TEST_TRANSCRIPT1", GencodeGtfFeature.GeneTranscriptType.PROTEIN_CODING,
                 null, geneName, GencodeGtfFeature.GeneTranscriptType.PROTEIN_CODING, null, "TEST_TRANSCRIPT1", exon.getExonNumber(), exon.getExonId(), GencodeGtfFeature.LocusLevel.AUTOMATICALLY_ANNOTATED,
                 Collections.emptyList(),
                 null
@@ -533,8 +555,11 @@ public class DataProviderForExampleGencodeGtfGene {
     private static GencodeGtfUTRFeature create5pUtr(final AtomicInteger featureOrderNum, final String contig,
                                                     final int length5Utr, final String geneName,
                                                     final GencodeGtfExonFeature exon, final Strand codingDirection) {
+        final int start = codingDirection == Strand.FORWARD ? exon.getGenomicStartLocation() : exon.getGenomicEndLocation() - length5Utr + 1;
+        final int end = codingDirection == Strand.FORWARD ? exon.getGenomicStartLocation() + length5Utr - 1 : exon.getGenomicEndLocation();
+
         final GencodeGtfFeatureBaseData tmp5pUtr = new GencodeGtfFeatureBaseData(featureOrderNum.getAndIncrement(), contig, GencodeGtfFeature.AnnotationSource.ENSEMBL, GencodeGtfFeature.FeatureType.UTR,
-                exon.getGenomicStartLocation(), exon.getGenomicStartLocation() + length5Utr - 1, codingDirection, GencodeGtfFeature.GenomicPhase.DOT, "TEST_GENE1", "TEST_TRANSCRIPT1", GencodeGtfFeature.GeneTranscriptType.PROTEIN_CODING,
+                start, end, codingDirection, GencodeGtfFeature.GenomicPhase.DOT, "TEST_GENE1", "TEST_TRANSCRIPT1", GencodeGtfFeature.GeneTranscriptType.PROTEIN_CODING,
                 null, geneName, GencodeGtfFeature.GeneTranscriptType.PROTEIN_CODING, null, "TEST_TRANSCRIPT1", exon.getExonNumber(), exon.getExonId(), GencodeGtfFeature.LocusLevel.AUTOMATICALLY_ANNOTATED,
                 Collections.emptyList(),
                 null
@@ -597,4 +622,5 @@ public class DataProviderForExampleGencodeGtfGene {
         exon.setCds(cds);
         return exon;
     }
+
 }
