@@ -1,11 +1,16 @@
 package org.broadinstitute.hellbender.testutils;
 
 import htsjdk.samtools.ValidationStringency;
+import java.nio.file.Path;
+import java.util.stream.StreamSupport;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.utils.Utils;
+import org.broadinstitute.hellbender.utils.gcs.BucketUtils;
+import org.broadinstitute.hellbender.utils.io.IOUtils;
+import org.broadinstitute.hellbender.utils.nio.PathLineIterator;
 import org.broadinstitute.hellbender.utils.text.XReadLines;
 import org.testng.Assert;
 
@@ -41,6 +46,10 @@ public final class IntegrationTestSpec {
 
     //Stringency for validation of bams.
     private ValidationStringency validationStringency;
+
+    // If true, test outputs are written to GCS.
+    // Otherwise they are written to the local disk.
+    private boolean writeToGcs;
 
     public IntegrationTestSpec(String args, List<String> expectedFileNames) {
         this.args = args;
@@ -79,6 +88,14 @@ public final class IntegrationTestSpec {
 
     public void setValidationStringency(final ValidationStringency validationStringency) {
         this.validationStringency = validationStringency;
+    }
+
+    public void setWriteToGcs(boolean writeToGcs) {
+        this.writeToGcs = writeToGcs;
+    }
+
+    public boolean getWriteToGcs() {
+        return this.writeToGcs;
     }
 
     public String getArgs() {
@@ -196,18 +213,25 @@ public final class IntegrationTestSpec {
         assertEqualTextFiles(resultFile, expectedFile, null);
     }
 
+    public static void assertEqualTextFiles(final File resultFile, final File expectedFile, final String commentPrefix) throws IOException {
+        assertEqualTextFiles(resultFile.toPath(), expectedFile.toPath(), commentPrefix);
+    }
+
     /**
      * Compares two text files and ignores all lines that start with the comment prefix.
      */
-    public static void assertEqualTextFiles(final File resultFile, final File expectedFile, final String commentPrefix) throws IOException {
+    public static void assertEqualTextFiles(final Path resultFile, final Path expectedFile, final String commentPrefix) throws IOException {
+
         final Predicate<? super String> startsWithComment;
         if (commentPrefix == null){
             startsWithComment = s -> false;
         } else {
             startsWithComment = s -> s.startsWith(commentPrefix);
         }
-        final List<String> actualLines = new XReadLines(resultFile).readLines().stream().filter(startsWithComment.negate()).collect(Collectors.toList());
-        final List<String> expectedLines = new XReadLines(expectedFile).readLines().stream().filter(startsWithComment.negate()).collect(Collectors.toList());
+        final List<String> actualLines = StreamSupport.stream(new PathLineIterator(resultFile).spliterator(), false)
+            .filter(startsWithComment.negate()).collect(Collectors.toList());
+        final List<String> expectedLines = StreamSupport.stream(new PathLineIterator(expectedFile).spliterator(), false)
+            .filter(startsWithComment.negate()).collect(Collectors.toList());
 
         //For ease of debugging, we look at the lines first and only then check their counts
         int numUnequalLines = 0;
