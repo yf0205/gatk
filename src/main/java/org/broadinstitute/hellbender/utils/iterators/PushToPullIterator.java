@@ -60,6 +60,7 @@ public class PushToPullIterator<T> implements Iterator<T>, Iterable<T> {
         }
         else {
             nextElement = null;
+            transformer.signalEndOfInput();
         }
     }
 

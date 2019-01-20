@@ -12,6 +12,7 @@ public abstract class ReadsDownsampler extends Downsampler<GATKRead> {
      *
      * @return true if reads must be submitted to this downsampler in coordinate order, otherwise false
      */
+    //TODO: should this be moved to PositionalDownsampler ?
     public abstract boolean requiresCoordinateSortOrder();
 
     /**
@@ -25,5 +26,6 @@ public abstract class ReadsDownsampler extends Downsampler<GATKRead> {
      * @param read the downsampler will assume that no reads located before this read will ever
      *             be submitted to it in the future
      */
+    //TODO: should this be moved to PositionalDownsampler ?
     public abstract void signalNoMoreReadsBefore( final GATKRead read );
 }
